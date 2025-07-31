@@ -32,21 +32,21 @@ function fetchExpiringCustomers() {
 document.addEventListener('DOMContentLoaded', function() {
     // 配置快捷按钮的链接
     const shortcutLinks = {
-        'btn-hetiao': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf',  // 业绩进度链接
-        'btn-sa': 'https://sa.jiandaoyun.com/',      // SA链接
-        'btn-huikuan': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 回款链接
-        'btn-xiadan': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',   // 接口链接
-        'btn-qiwei': 'https://kms.jiandaoyun.com/',                                           // kms链接
-        'btn-daike': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=12d9701c-b4b7-4ae7-b37f-ff3d418f4b8a'    // 客户归属链接
+        'btn-hetiao': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 业绩链接
+        'btn-sa': 'https://dc.jdydevelop.com/sa?redirect_uri=%2Finfo_search%2Fuser_search',      // SA链接
+        'btn-huikuan': 'https://crm.finereporthelp.com/WebReport/decision/view/report?viewlet=finance/jdy_confirm/bank_income_list_cofirm.cpt&op=write',  // 回款链接
+        'btn-xiadan': 'https://open.work.weixin.qq.com/wwopen/developer#/sass/license/service/order/detail?orderid=OI00000FEA3AC66805CA325DABD6AN',   // 接口链接
+        'btn-qiwei': 'https://crm.finereporthelp.com/WebReport/decision?#?activeTab=bf50447e-5ce2-4c7f-834e-3e1495df033a',                                           // kms链接
+        'btn-daike': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf'    // 看板链接
     };
     
     // 内联快捷按钮的链接配置（与顶部快捷按钮使用相同的链接）
     const inlineShortcutLinks = {
         'btn-hetiao-inline': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf',  // 业绩进度链接
-        'btn-sa-inline': 'https://sa.jiandaoyun.com/',      // SA链接
-        'btn-huikuan-inline': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 回款链接
-        'btn-xiadan-inline': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',   // 接口链接
-        'btn-qiwei-inline': 'https://kms.jiandaoyun.com/',      // kms链接
+        'btn-sa-inline': 'https://dc.jdydevelop.com/sa?redirect_uri=%2Finfo_search%2Fuser_search',      // SA链接
+        'btn-huikuan-inline': 'https://crm.finereporthelp.com/WebReport/decision/view/report?viewlet=finance/jdy_confirm/bank_income_list_cofirm.cpt&op=write',  // 回款链接
+        'btn-xiadan-inline': 'https://open.work.weixin.qq.com/wwopen/developer#/sass/license/service/order/detail?orderid=OI00000FEA3AC66805CA325DABD6AN',   // 接口链接
+        'btn-qiwei-inline': 'https://crm.finereporthelp.com/WebReport/decision?#?activeTab=bf50447e-5ce2-4c7f-834e-3e1495df033a',      // kms链接
         'btn-daike-inline': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=12d9701c-b4b7-4ae7-b37f-ff3d418f4b8a'    // 客户归属链接
     };
     
@@ -260,8 +260,6 @@ function initClipboardFeature() {
     const clipboardArea = document.getElementById('clipboardArea');
     const clipboardTextarea = document.getElementById('clipboardTextarea');
     const clipboardContent = clipboardArea?.querySelector('.clipboard-content');
-    const parseBtn = document.getElementById('parseClipboardBtn');
-    const clearBtn = document.getElementById('clearClipboardBtn');
     
     if (!clipboardArea || !clipboardTextarea || !clipboardContent) return;
     
@@ -280,32 +278,7 @@ function initClipboardFeature() {
         }
     });
     
-    // 解析按钮事件
-    if (parseBtn) {
-        parseBtn.addEventListener('click', function() {
-            const text = clipboardTextarea.value.trim();
-            if (text) {
-                parseClipboardText(text);
-            } else {
-                alert('请先输入要解析的文本内容');
-            }
-        });
-    }
-    
-    // 清空按钮事件
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function() {
-            clipboardTextarea.value = '';
-            clipboardTextarea.style.display = 'none';
-            clipboardContent.style.display = 'flex';
-            const clipboardResult = document.getElementById('clipboardResult');
-            if (clipboardResult) {
-                clipboardResult.style.display = 'none';
-            }
-        });
-    }
-    
-    // 支持粘贴事件
+    // 支持粘贴事件 - 自动解析并填充
     clipboardTextarea.addEventListener('paste', function(e) {
         setTimeout(() => {
             if (clipboardTextarea.value.trim()) {
@@ -313,19 +286,18 @@ function initClipboardFeature() {
             }
         }, 100);
     });
+    
+    // 输入事件 - 实时解析
+    clipboardTextarea.addEventListener('input', function(e) {
+        const text = clipboardTextarea.value.trim();
+        if (text.length > 10) { // 当输入内容足够长时自动解析
+            parseClipboardText(text);
+        }
+    });
 }
 
-// 解析粘贴板文本
+// 解析粘贴板文本并自动填充
 function parseClipboardText(text) {
-    // 显示解析进度
-    const resultDiv = document.getElementById('clipboardResult');
-    const parsedFieldsDiv = document.getElementById('parsedFields');
-    
-    if (!resultDiv || !parsedFieldsDiv) return;
-    
-    resultDiv.style.display = 'block';
-    parsedFieldsDiv.innerHTML = '<div style="text-align: center; padding: 20px;">正在解析文本...</div>';
-    
     // 发送到后端解析
     fetch('/parse_text', {
         method: 'POST',
@@ -336,112 +308,64 @@ function parseClipboardText(text) {
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success) {
-            displayParsedFields(data.fields);
-        } else {
-            parsedFieldsDiv.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: var(--error-color);">
-                    解析失败：${data.error || '未知错误'}
-                </div>
-            `;
+        if (data.success && data.fields) {
+            // 直接应用解析结果到表单
+            autoFillFields(data.fields);
         }
     })
     .catch(error => {
         console.error('解析文本错误:', error);
-        parsedFieldsDiv.innerHTML = `
-            <div style="text-align: center; padding: 20px; color: var(--error-color);">
-                解析失败，请检查网络连接
-            </div>
-        `;
     });
 }
 
-// 显示解析结果
-function displayParsedFields(fields) {
-    const parsedFieldsDiv = document.getElementById('parsedFields');
-    
-    if (!parsedFieldsDiv) return;
-    
-    if (Object.keys(fields).length === 0) {
-        parsedFieldsDiv.innerHTML = `
-            <div style="text-align: center; padding: 20px; color: var(--dark-gray);">
-                未识别到相关字段，请检查文本内容
-            </div>
-        `;
-        return;
-    }
-    
-    const fieldLabels = {
-        'company_name': '公司名称',
-        'tax_number': '税号',
-        'reg_address': '注册地址',
-        'reg_phone': '注册电话',
-        'bank_name': '开户行',
-        'bank_account': '账号',
-        'contact_name': '联系人',
-        'contact_phone': '联系电话',
-        'mail_address': '邮寄地址',
-        'jdy_account': '简道云账号'
-    };
-    
-    let html = '';
+// 自动填充字段到表单
+function autoFillFields(fields) {
     for (const [fieldName, value] of Object.entries(fields)) {
-        const label = fieldLabels[fieldName] || fieldName;
-        html += `
-            <div class="parsed-field-item">
-                <div>
-                    <div class="field-label">${label}</div>
-                    <div class="field-value">${value}</div>
-                </div>
-                <button class="field-apply-btn" onclick="applyFieldValue('${fieldName}', '${value.replace(/'/g, "\\'")}')">
-                    应用
-                </button>
-            </div>
-        `;
-    }
-    
-    parsedFieldsDiv.innerHTML = html;
-}
-
-// 应用字段值到表单
-function applyFieldValue(fieldName, value) {
-    const input = document.getElementById(fieldName);
-    if (input) {
-        input.value = value;
-        input.classList.add('auto-filled');
-        
-        // 移除高亮效果
-        setTimeout(() => {
-            input.classList.remove('auto-filled');
-        }, 2000);
-        
-        // 触发输入事件（用于公司名称搜索等）
-        input.dispatchEvent(new Event('input', { bubbles: true }));
+        const input = document.getElementById(fieldName);
+        if (input && value) {
+            input.value = value;
+            input.classList.add('auto-filled');
+            
+            // 移除高亮效果
+            setTimeout(() => {
+                input.classList.remove('auto-filled');
+            }, 2000);
+            
+            // 触发输入事件（用于公司名称搜索等）
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
     }
 }
 
 // 增强OCR功能
 function enhanceOCRFeature() {
-    const retryBtn = document.getElementById('retryOcrBtn');
-    const applyBtn = document.getElementById('applyOcrBtn');
-    const editBtn = document.getElementById('editOcrBtn');
-    
     // OCR图片上传处理
-    const imageUpload = document.getElementById('imageUpload');
-    if (imageUpload) {
-        imageUpload.addEventListener('change', function(e) {
+    const imageFileInput = document.getElementById('imageFileInput');
+    const imageUploadArea = document.getElementById('imageUploadArea');
+    
+    // 点击上传区域触发文件选择
+    if (imageUploadArea) {
+        imageUploadArea.addEventListener('click', function() {
+            imageFileInput.click();
+        });
+    }
+    
+    if (imageFileInput) {
+        imageFileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const previewImage = document.getElementById('previewImage');
                     const imagePreview = document.getElementById('imagePreview');
+                    const imageUploadArea = document.getElementById('imageUploadArea');
                     
                     // 显示图片预览
                     previewImage.src = e.target.result;
                     imagePreview.style.display = 'block';
+                    imageUploadArea.style.display = 'none';
                     
-                    // 自动开始OCR识别
+                    // 自动开始OCR识别并填充
                     processImageForOCR(e.target.result);
                 };
                 reader.readAsDataURL(file);
@@ -450,28 +374,27 @@ function enhanceOCRFeature() {
     }
 
     // 拖拽上传功能
-    const uploadArea = document.getElementById('uploadArea');
-    if (uploadArea) {
-        uploadArea.addEventListener('dragover', function(e) {
+    if (imageUploadArea) {
+        imageUploadArea.addEventListener('dragover', function(e) {
             e.preventDefault();
-            uploadArea.classList.add('dragover');
+            imageUploadArea.classList.add('dragover');
         });
 
-        uploadArea.addEventListener('dragleave', function(e) {
+        imageUploadArea.addEventListener('dragleave', function(e) {
             e.preventDefault();
-            uploadArea.classList.remove('dragover');
+            imageUploadArea.classList.remove('dragover');
         });
 
-        uploadArea.addEventListener('drop', function(e) {
+        imageUploadArea.addEventListener('drop', function(e) {
             e.preventDefault();
-            uploadArea.classList.remove('dragover');
+            imageUploadArea.classList.remove('dragover');
             
             const files = e.dataTransfer.files;
             if (files.length > 0) {
                 const file = files[0];
                 if (file.type.startsWith('image/')) {
-                    document.getElementById('imageUpload').files = files;
-                    document.getElementById('imageUpload').dispatchEvent(new Event('change'));
+                    imageFileInput.files = files;
+                    imageFileInput.dispatchEvent(new Event('change'));
                 } else {
                     alert('请上传图片文件');
                 }
@@ -479,56 +402,58 @@ function enhanceOCRFeature() {
         });
     }
     
-    // 重新识别按钮
-    if (retryBtn) {
-        retryBtn.addEventListener('click', function() {
-            const previewImage = document.getElementById('previewImage');
-            if (previewImage && previewImage.src) {
-                // 重新触发OCR识别
-                processImageForOCR(previewImage.src);
-            }
-        });
-    }
-    
-    // 应用识别结果按钮
-    if (applyBtn) {
-        applyBtn.addEventListener('click', function() {
-            const ocrText = document.getElementById('ocrText');
-            if (ocrText && ocrText.textContent) {
-                parseClipboardText(ocrText.textContent);
-            }
-        });
-    }
-    
-    // 手动编辑按钮
-    if (editBtn) {
-        editBtn.addEventListener('click', function() {
-            const ocrText = document.getElementById('ocrText');
-            const clipboardTextarea = document.getElementById('clipboardTextarea');
-            const clipboardContent = document.querySelector('.clipboard-content');
+    // 清除图片按钮
+    const clearImageBtn = document.getElementById('clearImageBtn');
+    if (clearImageBtn) {
+        clearImageBtn.addEventListener('click', function() {
+            const imagePreview = document.getElementById('imagePreview');
+            const imageUploadArea = document.getElementById('imageUploadArea');
+            const ocrProgress = document.getElementById('ocrProgress');
             
-            if (ocrText && clipboardTextarea && clipboardContent) {
-                // 将OCR结果复制到粘贴板区域
-                clipboardTextarea.value = ocrText.textContent;
-                clipboardTextarea.style.display = 'block';
-                clipboardContent.style.display = 'none';
-                clipboardTextarea.focus();
-            }
+            imagePreview.style.display = 'none';
+            imageUploadArea.style.display = 'block';
+            ocrProgress.style.display = 'none';
+            
+            // 清空文件输入
+            imageFileInput.value = '';
         });
     }
+    
+    // 支持粘贴图片
+    document.addEventListener('paste', function(e) {
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const blob = items[i].getAsFile();
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewImage = document.getElementById('previewImage');
+                    const imagePreview = document.getElementById('imagePreview');
+                    const imageUploadArea = document.getElementById('imageUploadArea');
+                    
+                    // 显示图片预览
+                    previewImage.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    imageUploadArea.style.display = 'none';
+                    
+                    // 自动开始OCR识别并填充
+                    processImageForOCR(e.target.result);
+                };
+                reader.readAsDataURL(blob);
+                break;
+            }
+        }
+    });
 }
 
-// 处理图片OCR识别
+// 处理图片OCR识别并自动填充
 function processImageForOCR(imageSrc) {
     const ocrProgress = document.getElementById('ocrProgress');
-    const ocrResult = document.getElementById('ocrResult');
-    const ocrText = document.getElementById('ocrText');
     
-    if (!ocrProgress || !ocrResult || !ocrText) return;
+    if (!ocrProgress) return;
     
     // 显示进度
     ocrProgress.style.display = 'block';
-    ocrResult.style.display = 'none';
     
     // 将base64图片发送到后端
     fetch('/ocr_image', {
@@ -542,19 +467,14 @@ function processImageForOCR(imageSrc) {
     .then(data => {
         ocrProgress.style.display = 'none';
         
-        if (data.success) {
-            ocrText.textContent = data.text || '未识别到文字内容';
-            ocrResult.style.display = 'block';
-        } else {
-            ocrText.textContent = `识别失败：${data.error || '未知错误'}`;
-            ocrResult.style.display = 'block';
+        if (data.success && data.text) {
+            // 直接解析OCR结果并自动填充
+            parseClipboardText(data.text);
         }
     })
     .catch(error => {
         console.error('OCR识别错误:', error);
         ocrProgress.style.display = 'none';
-        ocrText.textContent = '识别失败，请检查网络连接或尝试其他图片';
-        ocrResult.style.display = 'block';
     });
 }
 

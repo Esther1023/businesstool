@@ -477,7 +477,7 @@ def query_customer():
             return jsonify({'error': '数据文件读取失败'}), 500
 
         # 检查必要的列是否存在
-        required_columns = ['用户ID', '账号-企业名称']
+        required_columns = ['用户ID', '公司名称']
         for col in required_columns:
             if col not in df.columns:
                 logger.error(f"Excel文件中缺少'{col}'列")
@@ -487,7 +487,8 @@ def query_customer():
         if jdy_id:
             matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
         else:
-            matching_rows = df[df['账号-企业名称'].astype(str).str.contains(str(company_name), case=False, na=False)]
+            # 修复：应该查询"公司名称"列，而不是"账号-企业名称"列
+            matching_rows = df[df['公司名称'].astype(str).str.contains(str(company_name), case=False, na=False)]
             
         if matching_rows.empty:
             query_type = "简道云账号" if jdy_id else "公司名称"
