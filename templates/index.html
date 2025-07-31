@@ -35,33 +35,71 @@
                     <h3>甲方基本信息</h3>
                     <div class="variables-form">
                         <div class="form-group full-width">
-                            <label for="imageUploadArea">智能表单填充（拖拽或粘贴截图自动识别）</label>
-                            <div class="image-upload-container">
-                                <div class="image-upload-area" id="imageUploadArea">
-                                    <div class="upload-content">
-                                        <div class="upload-icon">📷</div>
-                                        <div class="upload-text">
-                                            <p>拖拽图片到此处或点击上传</p>
-                                            <p class="upload-hint">支持 PNG、JPG、JPEG 等格式，最大 10MB</p>
-                                            <p class="upload-hint">也可以直接粘贴剪贴板中的截图（Ctrl+V / Cmd+V）</p>
+                            <label>智能表单填充</label>
+                            <div class="smart-fill-container">
+                                <!-- 左侧：OCR识别区域 -->
+                                <div class="ocr-section">
+                                    <h4>📷 OCR图片识别</h4>
+                                    <div class="image-upload-container">
+                                        <div class="image-upload-area" id="imageUploadArea">
+                                            <div class="upload-content">
+                                                <div class="upload-icon">📷</div>
+                                                <div class="upload-text">
+                                                    <p>拖拽图片到此处或点击上传</p>
+                                                    <p class="upload-hint">支持 PNG、JPG、JPEG 等格式</p>
+                                                    <p class="upload-hint">也可以直接粘贴截图（Ctrl+V）</p>
+                                                </div>
+                                            </div>
+                                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+                                        </div>
+                                        <div class="image-preview" id="imagePreview" style="display: none;">
+                                            <img id="previewImage" src="" alt="预览图片">
+                                            <div class="preview-actions">
+                                                <button type="button" class="btn btn-secondary" id="clearImageBtn">清除图片</button>
+                                                <button type="button" class="btn btn-primary" id="retryOcrBtn">重新识别</button>
+                                            </div>
+                                        </div>
+                                        <div class="ocr-progress" id="ocrProgress" style="display: none;">
+                                            <div class="progress-bar">
+                                                <div class="progress-fill"></div>
+                                            </div>
+                                            <p class="progress-text">正在识别图片中的文字...</p>
+                                        </div>
+                                        <div class="ocr-result" id="ocrResult" style="display: none;">
+                                            <h5>识别结果：</h5>
+                                            <div class="ocr-text" id="ocrText"></div>
+                                            <div class="ocr-actions">
+                                                <button type="button" class="btn btn-success" id="applyOcrBtn">应用识别结果</button>
+                                                <button type="button" class="btn btn-secondary" id="editOcrBtn">手动编辑</button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
                                 </div>
-                                <div class="image-preview" id="imagePreview" style="display: none;">
-                                    <img id="previewImage" src="" alt="预览图片">
-                                    <div class="preview-actions">
-                                        <button type="button" class="btn btn-secondary" id="clearImageBtn">清除图片</button>
+
+                                <!-- 右侧：粘贴板自动填充区域 -->
+                                <div class="clipboard-section">
+                                    <h4>📋 粘贴板自动填充</h4>
+                                    <div class="clipboard-container">
+                                        <div class="clipboard-area" id="clipboardArea">
+                                            <div class="clipboard-content">
+                                                <div class="clipboard-icon">📋</div>
+                                                <div class="clipboard-text">
+                                                    <p>点击此处粘贴文本内容</p>
+                                                    <p class="clipboard-hint">支持从任何地方复制的文本</p>
+                                                    <p class="clipboard-hint">自动识别并填充表单字段</p>
+                                                </div>
+                                            </div>
+                                            <textarea id="clipboardTextarea" placeholder="在此粘贴文本内容，系统将自动识别并填充相关字段..." rows="8"></textarea>
+                                        </div>
+                                        <div class="clipboard-actions">
+                                            <button type="button" class="btn btn-primary" id="parseClipboardBtn">解析并填充</button>
+                                            <button type="button" class="btn btn-secondary" id="clearClipboardBtn">清空内容</button>
+                                        </div>
+                                        <div class="clipboard-result" id="clipboardResult" style="display: none;">
+                                            <h5>识别到的字段：</h5>
+                                            <div class="parsed-fields" id="parsedFields"></div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="ocr-progress" id="ocrProgress" style="display: none;">
-                                    <div class="progress-bar">
-                                        <div class="progress-fill"></div>
-                                    </div>
-                                    <p class="progress-text">正在识别图片中的文字...</p>
-                                </div>
-                                <div class="ocr-result" id="ocrResult" style="display: none;">
-                                    <!-- 简化的结果显示，主要用于错误处理 -->
                                 </div>
                             </div>
                         </div>

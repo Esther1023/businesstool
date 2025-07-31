@@ -655,6 +655,179 @@ def generate():
         except Exception as e:
             logger.error(f"清理临时文件时发生错误: {str(e)}")
 
+@app.route('/parse_text', methods=['POST'])
+@login_required
+def parse_text():
+    """解析粘贴板文本内容"""
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({'success': False, 'error': '没有提供文本内容'}), 400
+        
+        text = data['text'].strip()
+        if not text:
+            return jsonify({'success': False, 'error': '文本内容为空'}), 400
+        
+        logger.info(f"开始解析文本，长度: {len(text)} 字符")
+        
+        # 使用OCR服务的文本解析功能
+        if ocr_service:
+            parsed_fields = ocr_service.parse_text_fields(text)
+            logger.info(f"文本解析成功，识别到 {len(parsed_fields)} 个字段")
+            return jsonify({
+                'success': True,
+                'fields': parsed_fields,
+                'field_count': len(parsed_fields)
+            })
+        else:
+            # 如果OCR服务不可用，使用简单的文本解析
+            parsed_fields = simple_text_parse(text)
+            logger.info(f"简单文本解析完成，识别到 {len(parsed_fields)} 个字段")
+            return jsonify({
+                'success': True,
+                'fields': parsed_fields,
+                'field_count': len(parsed_fields)
+            })
+    
+    except Exception as e:
+        logger.error(f"文本解析异常: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'文本解析失败: {str(e)}',
+            'fields': {},
+            'field_count': 0
+        }), 500
+
+@app.route('/ocr_image', methods=['POST'])
+@login_required
+def ocr_image():
+    """处理OCR图片识别请求（base64格式）"""
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({'success': False, 'error': '没有提供图片数据'}), 400
+        
+        image_data = data['image']
+        if not image_data:
+            return jsonify({'success': False, 'error': '图片数据为空'}), 400
+        
+        # 处理base64图片数据
+        if image_data.startswith('data:image'):
+            # 移除data:image/xxx;base64,前缀
+            image_data = image_data.split(',')[1]
+        
+        try:
+            import base64
+            image_bytes = base64.b64decode(image_data)
+        except Exception as e:
+            return jsonify({'success': False, 'error': '图片数据格式错误'}), 400
+        
+        # 检查文件大小（限制为10MB）
+        if len(image_bytes) > 10 * 1024 * 1024:
+            return jsonify({'success': False, 'error': '图片大小超过限制（10MB）'}), 400
+        
+        logger.info(f"开始处理OCR请求，图片大小: {len(image_bytes)} bytes")
+        
+        # 使用OCR服务处理图片
+        if ocr_service:
+            result = ocr_service.extract_text_from_image(image_bytes)
+            if result['success']:
+                logger.info(f"OCR处理成功，提取文本长度: {len(result.get('text', ''))}")
+                return jsonify({
+                    'success': True,
+                    'text': result.get('text', ''),
+                    'confidence': result.get('confidence', 0)
+                })
+            else:
+                logger.error(f"OCR处理失败: {result.get('error', '未知错误')}")
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'OCR识别失败'),
+                    'text': ''
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'OCR服务暂时不可用，请使用粘贴板功能',
+                'text': ''
+            })
+    
+    except Exception as e:
+        logger.error(f"OCR图片处理异常: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'图片处理失败: {str(e)}',
+            'text': ''
+        }), 500
+
+def simple_text_parse(text):
+    """简单的文本解析功能，当OCR服务不可用时使用"""
+    import re
+    
+    fields = {}
+    
+    # 定义字段匹配规则
+    patterns = {
+        'company_name': [
+            r'公司名称[：:]\s*(.+?)(?:\n|$)',
+            r'企业名称[：:]\s*(.+?)(?:\n|$)',
+            r'名\s*称[：:]\s*(.+?)(?:\n|$)',
+            r'单位名称[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'tax_number': [
+            r'税号[：:]\s*([A-Z0-9]{15,20})(?:\n|$)',
+            r'纳税人识别号[：:]\s*([A-Z0-9]{15,20})(?:\n|$)',
+            r'统一社会信用代码[：:]\s*([A-Z0-9]{15,20})(?:\n|$)'
+        ],
+        'reg_address': [
+            r'注册地址[：:]\s*(.+?)(?:\n|$)',
+            r'地\s*址[：:]\s*(.+?)(?:\n|$)',
+            r'注册地[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'reg_phone': [
+            r'注册电话[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'电\s*话[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'联系电话[：:]\s*([0-9\-\s]+)(?:\n|$)'
+        ],
+        'bank_name': [
+            r'开户行[：:]\s*(.+?)(?:\n|$)',
+            r'开户银行[：:]\s*(.+?)(?:\n|$)',
+            r'银行名称[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'bank_account': [
+            r'账号[：:]\s*([0-9\s]+)(?:\n|$)',
+            r'银行账号[：:]\s*([0-9\s]+)(?:\n|$)',
+            r'账户[：:]\s*([0-9\s]+)(?:\n|$)'
+        ],
+        'contact_name': [
+            r'联系人[：:]\s*(.+?)(?:\n|$)',
+            r'负责人[：:]\s*(.+?)(?:\n|$)',
+            r'经办人[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'contact_phone': [
+            r'联系人电话[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'手机[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'移动电话[：:]\s*([0-9\-\s]+)(?:\n|$)'
+        ],
+        'mail_address': [
+            r'邮寄地址[：:]\s*(.+?)(?:\n|$)',
+            r'通讯地址[：:]\s*(.+?)(?:\n|$)',
+            r'收件地址[：:]\s*(.+?)(?:\n|$)'
+        ]
+    }
+    
+    # 对每个字段进行匹配
+    for field_name, field_patterns in patterns.items():
+        for pattern in field_patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                value = match.group(1).strip()
+                if value and len(value) > 0:
+                    fields[field_name] = value
+                    break
+    
+    return fields
+
 @app.route('/ocr_process', methods=['POST'])
 def ocr_process():
     """处理OCR图片识别请求"""

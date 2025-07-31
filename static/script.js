@@ -247,7 +247,316 @@ document.addEventListener('DOMContentLoaded', function() {
         // 显示备忘录白板（替代原来的25-30天到期客户看板）
         showFutureExpiringCustomersDashboard([], []);
     }
+    
+    // 智能表单填充功能
+    initClipboardFeature();
+    
+    // OCR功能增强
+    enhanceOCRFeature();
 });
+
+// 初始化粘贴板功能
+function initClipboardFeature() {
+    const clipboardArea = document.getElementById('clipboardArea');
+    const clipboardTextarea = document.getElementById('clipboardTextarea');
+    const clipboardContent = clipboardArea?.querySelector('.clipboard-content');
+    const parseBtn = document.getElementById('parseClipboardBtn');
+    const clearBtn = document.getElementById('clearClipboardBtn');
+    
+    if (!clipboardArea || !clipboardTextarea || !clipboardContent) return;
+    
+    // 点击区域显示文本框
+    clipboardContent.addEventListener('click', function() {
+        clipboardContent.style.display = 'none';
+        clipboardTextarea.style.display = 'block';
+        clipboardTextarea.focus();
+    });
+    
+    // 文本框失去焦点时的处理
+    clipboardTextarea.addEventListener('blur', function() {
+        if (!clipboardTextarea.value.trim()) {
+            clipboardTextarea.style.display = 'none';
+            clipboardContent.style.display = 'flex';
+        }
+    });
+    
+    // 解析按钮事件
+    if (parseBtn) {
+        parseBtn.addEventListener('click', function() {
+            const text = clipboardTextarea.value.trim();
+            if (text) {
+                parseClipboardText(text);
+            } else {
+                alert('请先输入要解析的文本内容');
+            }
+        });
+    }
+    
+    // 清空按钮事件
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            clipboardTextarea.value = '';
+            clipboardTextarea.style.display = 'none';
+            clipboardContent.style.display = 'flex';
+            const clipboardResult = document.getElementById('clipboardResult');
+            if (clipboardResult) {
+                clipboardResult.style.display = 'none';
+            }
+        });
+    }
+    
+    // 支持粘贴事件
+    clipboardTextarea.addEventListener('paste', function(e) {
+        setTimeout(() => {
+            if (clipboardTextarea.value.trim()) {
+                parseClipboardText(clipboardTextarea.value.trim());
+            }
+        }, 100);
+    });
+}
+
+// 解析粘贴板文本
+function parseClipboardText(text) {
+    // 显示解析进度
+    const resultDiv = document.getElementById('clipboardResult');
+    const parsedFieldsDiv = document.getElementById('parsedFields');
+    
+    if (!resultDiv || !parsedFieldsDiv) return;
+    
+    resultDiv.style.display = 'block';
+    parsedFieldsDiv.innerHTML = '<div style="text-align: center; padding: 20px;">正在解析文本...</div>';
+    
+    // 发送到后端解析
+    fetch('/parse_text', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: text })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            displayParsedFields(data.fields);
+        } else {
+            parsedFieldsDiv.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--error-color);">
+                    解析失败：${data.error || '未知错误'}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('解析文本错误:', error);
+        parsedFieldsDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: var(--error-color);">
+                解析失败，请检查网络连接
+            </div>
+        `;
+    });
+}
+
+// 显示解析结果
+function displayParsedFields(fields) {
+    const parsedFieldsDiv = document.getElementById('parsedFields');
+    
+    if (!parsedFieldsDiv) return;
+    
+    if (Object.keys(fields).length === 0) {
+        parsedFieldsDiv.innerHTML = `
+            <div style="text-align: center; padding: 20px; color: var(--dark-gray);">
+                未识别到相关字段，请检查文本内容
+            </div>
+        `;
+        return;
+    }
+    
+    const fieldLabels = {
+        'company_name': '公司名称',
+        'tax_number': '税号',
+        'reg_address': '注册地址',
+        'reg_phone': '注册电话',
+        'bank_name': '开户行',
+        'bank_account': '账号',
+        'contact_name': '联系人',
+        'contact_phone': '联系电话',
+        'mail_address': '邮寄地址',
+        'jdy_account': '简道云账号'
+    };
+    
+    let html = '';
+    for (const [fieldName, value] of Object.entries(fields)) {
+        const label = fieldLabels[fieldName] || fieldName;
+        html += `
+            <div class="parsed-field-item">
+                <div>
+                    <div class="field-label">${label}</div>
+                    <div class="field-value">${value}</div>
+                </div>
+                <button class="field-apply-btn" onclick="applyFieldValue('${fieldName}', '${value.replace(/'/g, "\\'")}')">
+                    应用
+                </button>
+            </div>
+        `;
+    }
+    
+    parsedFieldsDiv.innerHTML = html;
+}
+
+// 应用字段值到表单
+function applyFieldValue(fieldName, value) {
+    const input = document.getElementById(fieldName);
+    if (input) {
+        input.value = value;
+        input.classList.add('auto-filled');
+        
+        // 移除高亮效果
+        setTimeout(() => {
+            input.classList.remove('auto-filled');
+        }, 2000);
+        
+        // 触发输入事件（用于公司名称搜索等）
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
+// 增强OCR功能
+function enhanceOCRFeature() {
+    const retryBtn = document.getElementById('retryOcrBtn');
+    const applyBtn = document.getElementById('applyOcrBtn');
+    const editBtn = document.getElementById('editOcrBtn');
+    
+    // OCR图片上传处理
+    const imageUpload = document.getElementById('imageUpload');
+    if (imageUpload) {
+        imageUpload.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewImage = document.getElementById('previewImage');
+                    const imagePreview = document.getElementById('imagePreview');
+                    
+                    // 显示图片预览
+                    previewImage.src = e.target.result;
+                    imagePreview.style.display = 'block';
+                    
+                    // 自动开始OCR识别
+                    processImageForOCR(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // 拖拽上传功能
+    const uploadArea = document.getElementById('uploadArea');
+    if (uploadArea) {
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                if (file.type.startsWith('image/')) {
+                    document.getElementById('imageUpload').files = files;
+                    document.getElementById('imageUpload').dispatchEvent(new Event('change'));
+                } else {
+                    alert('请上传图片文件');
+                }
+            }
+        });
+    }
+    
+    // 重新识别按钮
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function() {
+            const previewImage = document.getElementById('previewImage');
+            if (previewImage && previewImage.src) {
+                // 重新触发OCR识别
+                processImageForOCR(previewImage.src);
+            }
+        });
+    }
+    
+    // 应用识别结果按钮
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function() {
+            const ocrText = document.getElementById('ocrText');
+            if (ocrText && ocrText.textContent) {
+                parseClipboardText(ocrText.textContent);
+            }
+        });
+    }
+    
+    // 手动编辑按钮
+    if (editBtn) {
+        editBtn.addEventListener('click', function() {
+            const ocrText = document.getElementById('ocrText');
+            const clipboardTextarea = document.getElementById('clipboardTextarea');
+            const clipboardContent = document.querySelector('.clipboard-content');
+            
+            if (ocrText && clipboardTextarea && clipboardContent) {
+                // 将OCR结果复制到粘贴板区域
+                clipboardTextarea.value = ocrText.textContent;
+                clipboardTextarea.style.display = 'block';
+                clipboardContent.style.display = 'none';
+                clipboardTextarea.focus();
+            }
+        });
+    }
+}
+
+// 处理图片OCR识别
+function processImageForOCR(imageSrc) {
+    const ocrProgress = document.getElementById('ocrProgress');
+    const ocrResult = document.getElementById('ocrResult');
+    const ocrText = document.getElementById('ocrText');
+    
+    if (!ocrProgress || !ocrResult || !ocrText) return;
+    
+    // 显示进度
+    ocrProgress.style.display = 'block';
+    ocrResult.style.display = 'none';
+    
+    // 将base64图片发送到后端
+    fetch('/ocr_image', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: imageSrc })
+    })
+    .then(response => response.json())
+    .then(data => {
+        ocrProgress.style.display = 'none';
+        
+        if (data.success) {
+            ocrText.textContent = data.text || '未识别到文字内容';
+            ocrResult.style.display = 'block';
+        } else {
+            ocrText.textContent = `识别失败：${data.error || '未知错误'}`;
+            ocrResult.style.display = 'block';
+        }
+    })
+    .catch(error => {
+        console.error('OCR识别错误:', error);
+        ocrProgress.style.display = 'none';
+        ocrText.textContent = '识别失败，请检查网络连接或尝试其他图片';
+        ocrResult.style.display = 'block';
+    });
+}
 
 
 
