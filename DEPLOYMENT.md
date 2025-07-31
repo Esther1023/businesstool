@@ -45,7 +45,7 @@ git push -u origin main
 ```
 FLASK_ENV=production
 SECRET_KEY=your-super-secret-key-here
-PORT=5000
+PORT=8080
 LOG_LEVEL=INFO
 ```
 
@@ -103,7 +103,7 @@ docker run -p 5000:5000 \
 ```bash
 FLASK_ENV=production          # 生产环境标识
 SECRET_KEY=your-secret-key    # Flask密钥（必须更改）
-PORT=5000                     # 端口号（平台自动设置）
+PORT=8080                     # 端口号（平台自动设置）
 ```
 
 ### 可选的环境变量

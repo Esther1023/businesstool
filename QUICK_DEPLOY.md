@@ -61,10 +61,10 @@ SECRET_KEY=your-secret-key
 docker build -t ocr-system .
 
 # 运行容器
-docker run -p 5000:5000 \
+docker run -p 8080:8080 \
   -e FLASK_ENV=production \
   -e SECRET_KEY=your-secret-key \
-  -e PORT=5000 \
+  -e PORT=8080 \
   ocr-system
 ```
 
@@ -83,7 +83,7 @@ SECRET_KEY=your-super-secret-key
 
 # 可选
 LOG_LEVEL=INFO
-PORT=5000  # 通常由平台自动设置
+PORT=8080  # 通常由平台自动设置
 ```
 
 ## ✅ 部署检查清单
