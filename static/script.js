@@ -3,41 +3,51 @@ function fetchExpiringCustomers() {
     fetch('/get_expiring_customers')
         .then(response => response.json())
         .then(data => {
-            if (data.error) {
-                console.error('获取即将过期客户失败:', data.error);
-                return;
-            }
+            const todayDate = data.today_date || new Date().toLocaleDateString('zh-CN');
+            const reminderType = data.reminder_type || '';
             
-            if (data.expiring_customers && data.expiring_customers.length > 0) {
-                showExpiringCustomersAlert(data.expiring_customers);
+            if (data.message) {
+                // 如果有消息（比如周末提示或没有到期客户），显示消息
+                showExpiringCustomersAlert([], data.message, todayDate, reminderType);
+            } else if (data.expiring_customers && data.expiring_customers.length > 0) {
+                // 有到期客户，显示列表
+                showExpiringCustomersAlert(data.expiring_customers, null, todayDate, reminderType);
+            } else if (data.error) {
+                // 有错误但不显示技术错误，只显示友好提示
+                showExpiringCustomersAlert([], '暂时无法获取客户信息', todayDate, reminderType);
+            } else {
+                // 默认情况：没有到期客户
+                showExpiringCustomersAlert([], '未来几天没有到期的客户', todayDate, reminderType);
             }
         })
         .catch(error => {
             console.error('获取即将过期客户错误:', error);
+            // 不显示技术错误，只显示友好提示
+            const todayDate = new Date().toLocaleDateString('zh-CN');
+            showExpiringCustomersAlert([], '暂时无法获取客户信息', todayDate, '系统错误');
         });
 }
 
-// 创建并显示即将过期客户提示框
 // 快捷按钮链接配置
 document.addEventListener('DOMContentLoaded', function() {
     // 配置快捷按钮的链接
     const shortcutLinks = {
-        'btn-hetiao': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 业绩链接
-        'btn-sa': 'https://dc.jdydevelop.com/sa?redirect_uri=%2Finfo_search%2Fuser_search',      // SA链接
-        'btn-huikuan': 'https://crm.finereporthelp.com/WebReport/decision/view/report?viewlet=finance/jdy_confirm/bank_income_list_cofirm.cpt&op=write',  // 回款链接
-        'btn-xiadan': 'https://open.work.weixin.qq.com/wwopen/developer#/sass/license/service/order/detail?orderid=OI00000FEA3AC66805CA325DABD6AN',   // 接口链接
-        'btn-qiwei': 'https://crm.finereporthelp.com/WebReport/decision?#?activeTab=bf50447e-5ce2-4c7f-834e-3e1495df033a',                                           // kms链接
-        'btn-daike': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf'    // 看板链接
+        'btn-hetiao': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf',  // 业绩进度链接
+        'btn-sa': 'https://sa.jiandaoyun.com/',      // SA链接
+        'btn-huikuan': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 回款链接
+        'btn-xiadan': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',   // 接口链接
+        'btn-qiwei': 'https://kms.jiandaoyun.com/',                                           // kms链接
+        'btn-daike': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=12d9701c-b4b7-4ae7-b37f-ff3d418f4b8a'    // 客户归属链接
     };
     
     // 内联快捷按钮的链接配置（与顶部快捷按钮使用相同的链接）
     const inlineShortcutLinks = {
-        'btn-hetiao-inline': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 业绩链接
-        'btn-sa-inline': 'https://dc.jdydevelop.com/sa?redirect_uri=%2Finfo_search%2Fuser_search',      // SA链接
-        'btn-huikuan-inline': 'https://crm.finereporthelp.com/WebReport/decision/view/report?viewlet=finance/jdy_confirm/bank_income_list_cofirm.cpt&op=write',  // 回款链接
-        'btn-xiadan-inline': 'https://open.work.weixin.qq.com/wwopen/developer#/sass/license/service/order/detail?orderid=OI00000FEA3AC66805CA325DABD6AN',   // 接口链接
-        'btn-qiwei-inline': 'https://crm.finereporthelp.com/WebReport/decision?#?activeTab=bf50447e-5ce2-4c7f-834e-3e1495df033a',      // kms链接
-        'btn-daike-inline': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf'    // 看板链接
+        'btn-hetiao-inline': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=4a3d1d52-2e58-4e0c-bb82-722b1a8bc6bf',  // 业绩进度链接
+        'btn-sa-inline': 'https://sa.jiandaoyun.com/',      // SA链接
+        'btn-huikuan-inline': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',  // 回款链接
+        'btn-xiadan-inline': 'https://bi.jdydevelop.com/webroot/decision#/?activeTab=6ed7a7e6-70b0-4814-9424-35d784d8e686',   // 接口链接
+        'btn-qiwei-inline': 'https://kms.jiandaoyun.com/',      // kms链接
+        'btn-daike-inline': 'https://bi.finereporthelp.com/webroot/decision?#/directory?activeTab=12d9701c-b4b7-4ae7-b37f-ff3d418f4b8a'    // 客户归属链接
     };
     
     
@@ -62,83 +72,95 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function showExpiringCustomersAlert(customers) {
-    // 检查是否已存在提示框，如果存在则移除
-    const existingAlert = document.querySelector('.expiring-customers-alert');
+function showExpiringCustomersAlert(customers, message = null, todayDate = '', reminderType = '') {
+    // 如果已经存在提示框，先移除
+    const existingAlert = document.getElementById('expiring-customers-alert');
     if (existingAlert) {
         existingAlert.remove();
     }
-    
-    // 创建提示框容器
-    const alertContainer = document.createElement('div');
-    alertContainer.className = 'expiring-customers-alert';
-    
-    // 创建提示框头部
-    const alertHeader = document.createElement('div');
-    alertHeader.className = 'expiring-customers-header';
-    
-    const alertTitle = document.createElement('h4');
-    alertTitle.textContent = '即将过期客户提醒';
-    
-    const closeButton = document.createElement('button');
-    closeButton.className = 'close-btn';
-    closeButton.textContent = '×';
-    closeButton.onclick = function() {
-        alertContainer.remove();
+
+    // 创建提示框（使用原来的CSS类名和样式）
+    const alertDiv = document.createElement('div');
+    alertDiv.id = 'expiring-customers-alert';
+    alertDiv.className = 'expiring-customers-alert';
+
+    // 创建头部（保持原来的结构）
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'expiring-customers-header';
+    headerDiv.style.display = 'flex';
+    headerDiv.style.justifyContent = 'space-between';
+    headerDiv.style.alignItems = 'center';
+    headerDiv.style.padding = '12px 15px';
+    headerDiv.style.backgroundColor = 'var(--secondary-color)';
+    headerDiv.style.borderRadius = '8px 8px 0 0';
+    headerDiv.style.borderBottom = '1px solid var(--border-color)';
+
+    const titleDiv = document.createElement('h4');
+    titleDiv.style.margin = '0';
+    titleDiv.style.color = 'var(--text-color)';  // 改为黑色，与备忘录标题一致
+    titleDiv.style.fontSize = '14px';
+    titleDiv.style.fontWeight = '600';
+    titleDiv.textContent = `📅 ${todayDate} - 提醒看板`;  // 简化标题内容
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'close-btn';
+    closeBtn.textContent = '×';
+    closeBtn.onclick = function() {
+        alertDiv.remove();
     };
-    
-    alertHeader.appendChild(alertTitle);
-    alertHeader.appendChild(closeButton);
-    
-    // 创建提示框内容
-    const alertBody = document.createElement('div');
-    alertBody.className = 'expiring-customers-body';
-    
-    // 添加客户信息
-    customers.forEach(customer => {
-        const customerItem = document.createElement('div');
-        customerItem.className = 'expiring-customer-item';
-        customerItem.style.padding = '2px 0 2px 0';
-        
-        const dateElement = document.createElement('div');
-        dateElement.className = 'expiring-customer-date';
-        dateElement.textContent = `${customer.expiry_date}`;
-        dateElement.style.marginTop = '0';
-        dateElement.style.marginBottom = '2px';
-        
-        const accountElement = document.createElement('div');
-        accountElement.textContent = `${customer.jdy_account}`;
-        accountElement.style.marginBottom = '1px';
-        
-        const companyElement = document.createElement('div');
-        companyElement.textContent = `${customer.company_name}`;
-        companyElement.style.marginBottom = '1px';
-        
-        const salesElement = document.createElement('div');
-        salesElement.className = 'expiring-customer-sales';
-        salesElement.textContent = `${customer.sales_person || '未指定'}`;
-        if (customer.sales_person === 'Esther-朱晓琳') {
-            salesElement.classList.add('esther-sales');
-        } else if (customer.sales_person === 'public-公共账号') {
-            salesElement.classList.add('public-sales');
-        }
-        salesElement.style.marginTop = '2px';
-        salesElement.style.marginBottom = '0';
-        
-        customerItem.appendChild(dateElement);
-        customerItem.appendChild(accountElement);
-        customerItem.appendChild(companyElement);
-        customerItem.appendChild(salesElement);
-        
-        alertBody.appendChild(customerItem);
-    });
-    
+
+    headerDiv.appendChild(titleDiv);
+    headerDiv.appendChild(closeBtn);
+
+    // 创建内容区域（保持原来的结构）
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'expiring-customers-body';
+
+    if (message) {
+        // 显示消息（周末提示或没有到期客户）
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'expiring-customer-item';
+        messageDiv.innerHTML = `
+            <div style="display: flex; align-items: center; padding: 8px 0;">
+                <span style="margin-right: 8px;">ℹ️</span>
+                <span style="color: var(--text-color); font-size: 14px;">${message}</span>
+            </div>
+        `;
+        bodyDiv.appendChild(messageDiv);
+    } else if (customers && customers.length > 0) {
+        // 显示到期客户列表
+        customers.forEach(customer => {
+            const customerDiv = document.createElement('div');
+            customerDiv.className = 'expiring-customer-item';
+            customerDiv.innerHTML = `
+                <div class="expiring-customer-date">${customer.expiry_date}</div>
+                <div style="font-size: 13px; color: var(--text-color); line-height: 1.4;">
+                    <div>公司：${customer.company_name}</div>
+                    <div>账号：${customer.jdy_account}</div>
+                    <div>销售：${customer.sales_person}</div>
+                </div>
+            `;
+            bodyDiv.appendChild(customerDiv);
+        });
+    } else {
+        // 默认情况：没有到期客户
+        const noCustomerDiv = document.createElement('div');
+        noCustomerDiv.className = 'expiring-customer-item';
+        noCustomerDiv.innerHTML = `
+            <div style="display: flex; align-items: center; padding: 8px 0;">
+                <span style="margin-right: 8px;">✅</span>
+                <span style="color: var(--text-color); font-size: 14px;">未来几天没有到期的客户</span>
+            </div>
+        `;
+        bodyDiv.appendChild(noCustomerDiv);
+    }
+
     // 组装提示框
-    // 不添加标题部分，直接添加内容
-    alertContainer.appendChild(alertBody);
-    
-    // 添加到页面
-    document.body.appendChild(alertContainer);
+    alertDiv.appendChild(headerDiv);
+    alertDiv.appendChild(bodyDiv);
+    document.body.appendChild(alertDiv);
+
+    // 看板一直存在，不自动关闭
 }
 
 // 创建备忘录白板（替代原来的25-30天到期客户看板）
@@ -251,17 +273,23 @@ function queryCustomer() {
             return;
         }
         
+        // 更新表单字段
+        if (data.company_name && data.company_name !== 'nan') {
+            document.querySelector('[name="company_name"]').value = data.company_name;
+        }
+        if (data.tax_number && data.tax_number !== 'nan') {
+            document.querySelector('[name="tax_number"]').value = data.tax_number;
+        }
+        
         // 更新显示内容
-        document.getElementById('companyName').textContent = data.company_name || '暂无数据';
-        document.getElementById('customerType').textContent = data.customer_type || '暂无数据';
-        document.getElementById('customerRegion').textContent = data.customer_region || '暂无数据';
-        document.getElementById('salesPerson').textContent = data.sales || '暂无数据';
-        document.getElementById('jdyAccountInfo').textContent = data.jdy_account || '暂无数据';
+        document.getElementById('accountEnterpriseName').textContent = data.account_enterprise_name || '暂无数据';
+        document.getElementById('integrationMode').textContent = data.integration_mode || '暂无数据';
         document.getElementById('expiryDate').textContent = data.expiry_date || '暂无数据';
-        document.getElementById('version').textContent = data.version || '暂无数据';
-        document.getElementById('accountCount').textContent = data.account_count || '0';
-        document.getElementById('paidAccountCount').textContent = data.paid_account_count || '0';
         document.getElementById('uidArr').textContent = data.uid_arr || '0元';
+        document.getElementById('customerClassification').textContent = data.customer_classification || '暂无数据';
+        document.getElementById('salesPerson').textContent = data.sales || '暂无数据';
+        document.getElementById('salesCnEn').textContent = data.sales_cn_en || '暂无数据';
+        document.getElementById('jdySales').textContent = data.jdy_sales || '暂无数据';
         
         // 显示结果区域
         document.getElementById('customerInfo').style.display = 'block';

@@ -9,6 +9,24 @@ import logging
 template_handler = None
 ocr_service = None
 
+# 尝试导入OCR服务
+try:
+    from ocr_service import OCRService
+    OCR_SERVICE_AVAILABLE = True
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"OCR服务导入失败: {str(e)}")
+    OCR_SERVICE_AVAILABLE = False
+
+# 尝试导入模板处理器
+try:
+    from template_handler import TemplateHandler
+    TEMPLATE_HANDLER_AVAILABLE = True
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"模板处理器导入失败: {str(e)}")
+    TEMPLATE_HANDLER_AVAILABLE = False
+
 # 创建Flask应用
 app = Flask(__name__)
 
@@ -40,11 +58,27 @@ logger = logging.getLogger(__name__)
 
 # 初始化OCR服务（容错处理）
 try:
-    ocr_service = OCRService()
-    logger.info("OCR服务初始化成功")
+    if OCR_SERVICE_AVAILABLE:
+        ocr_service = OCRService()
+        logger.info("OCR服务初始化成功")
+    else:
+        logger.warning("OCR服务不可用：导入失败")
+        ocr_service = None
 except Exception as e:
     logger.warning(f"OCR服务初始化失败: {str(e)}")
     ocr_service = None
+
+# 初始化模板处理器（容错处理）
+try:
+    if TEMPLATE_HANDLER_AVAILABLE:
+        template_handler = TemplateHandler()
+        logger.info("模板处理器初始化成功")
+    else:
+        logger.warning("模板处理器不可用：导入失败")
+        template_handler = None
+except Exception as e:
+    logger.warning(f"模板处理器初始化失败: {str(e)}")
+    template_handler = None
 
 # 存储最后导入时间
 last_import_time = None
@@ -173,7 +207,7 @@ def get_last_import_time():
 def get_future_expiring_customers():
     try:
         # 检查文件是否存在
-        excel_path = os.path.join(os.path.dirname(__file__), '六大战区简道云客户.xlsx')
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -186,7 +220,7 @@ def get_future_expiring_customers():
             logger.error(f"Excel读取错误: {str(e)}")
             return jsonify({'error': '数据文件读取失败'}), 500
 
-        if '版本到期时间' not in df.columns or '简道云账号' not in df.columns or '公司名称' not in df.columns or '续费责任销售' not in df.columns:
+        if '到期日期' not in df.columns or '用户ID' not in df.columns or '账号-企业名称' not in df.columns or '续费责任销售' not in df.columns:
             logger.error("Excel文件中缺少必要列")
             return jsonify({'error': '数据格式错误：缺少必要列'}), 500
         
@@ -202,21 +236,28 @@ def get_future_expiring_customers():
         other_customers = []
         
         for _, row in df.iterrows():
-            if pd.notna(row['版本到期时间']):
+            if pd.notna(row['到期日期']):
                 try:
-                    expiry_date = pd.to_datetime(row['版本到期时间'])
+                    expiry_date = pd.to_datetime(row['到期日期'])
                     # 如果过期时间在23天后和30天后之间
                     if days_23_later <= expiry_date <= days_30_later:
+                        # 处理责任销售字段 - 优先使用续费责任销售，如果为空则使用责任销售中英文
+                        sales_raw = row.get('续费责任销售', '')
+                        if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                            sales_person = str(row.get('责任销售中英文', ''))
+                        else:
+                            sales_person = str(sales_raw)
+                        
                         customer_info = {
-                            'id': str(row.get('ID', '')),
+                            'id': str(row.get('用户ID', '')),
                             'expiry_date': expiry_date.strftime('%Y年%m月%d日'),
-                            'jdy_account': str(row.get('简道云账号', '')),
-                            'company_name': str(row.get('公司名称', '')),
-                            'sales_person': str(row.get('续费责任销售', ''))
+                            'jdy_account': str(row.get('用户ID', '')),
+                            'company_name': str(row.get('账号-企业名称', '')),
+                            'sales_person': sales_person
                         }
                         
-                        # 根据续费责任销售分类
-                        if '朱晓琳' in str(row.get('续费责任销售', '')) or 'Esther' in str(row.get('续费责任销售', '')):
+                        # 根据续费责任销售分类（使用处理后的sales_person）
+                        if '朱晓琳' in sales_person or 'Esther' in sales_person:
                             esther_customers.append(customer_info)
                         else:
                             other_customers.append(customer_info)
@@ -243,57 +284,157 @@ def get_future_expiring_customers():
 @login_required
 def get_expiring_customers():
     try:
+        # 获取当前日期
+        now = datetime.now()
+        today = now.date()
+        
         # 检查文件是否存在
-        excel_path = os.path.join(os.path.dirname(__file__), '六大战区简道云客户.xlsx')
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
-            return jsonify({'error': '数据文件不存在'}), 500
+            return jsonify({'expiring_customers': [], 'error': '数据文件不存在', 'today_date': today.strftime('%Y年%m月%d日')})
 
         try:
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
             logger.error(f"Excel读取错误: {str(e)}")
-            return jsonify({'error': '数据文件读取失败'}), 500
+            return jsonify({'expiring_customers': [], 'error': '数据文件读取失败', 'today_date': today.strftime('%Y年%m月%d日')})
 
-        if '版本到期时间' not in df.columns or '简道云账号' not in df.columns or '公司名称' not in df.columns:
+        if '到期日期' not in df.columns or '用户ID' not in df.columns or '账号-企业名称' not in df.columns:
             logger.error("Excel文件中缺少必要列")
-            return jsonify({'error': '数据格式错误：缺少必要列'}), 500
+            return jsonify({'expiring_customers': [], 'error': '数据格式错误：缺少必要列', 'today_date': today.strftime('%Y年%m月%d日')})
         
-        # 获取当前日期
-        now = datetime.now()
+        # 定义节假日（可以根据需要扩展）
+        holidays = [
+            # 2024年节假日
+            '2024-01-01', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-15', '2024-02-16', '2024-02-17',
+            '2024-04-04', '2024-04-05', '2024-04-06',
+            '2024-05-01', '2024-05-02', '2024-05-03',
+            '2024-06-10',
+            '2024-09-15', '2024-09-16', '2024-09-17',
+            '2024-10-01', '2024-10-02', '2024-10-03', '2024-10-04', '2024-10-05', '2024-10-06', '2024-10-07',
+            # 2025年节假日
+            '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03',
+            '2025-04-05', '2025-04-06', '2025-04-07',
+            '2025-05-01', '2025-05-02', '2025-05-03',
+            '2025-06-09',
+            '2025-09-06', '2025-09-07', '2025-09-08',
+            '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07'
+        ]
         
-        # 计算一周后的日期
-        one_week_later = now + pd.Timedelta(days=7)
+        holiday_dates = [datetime.strptime(h, '%Y-%m-%d').date() for h in holidays]
         
-        # 筛选出一周内将要过期的客户
+        # 判断提醒逻辑
+        weekday = today.weekday()  # 0=周一, 1=周二, ..., 6=周日
+        target_dates = []
+        reminder_type = ""
+        
+        # 检查是否是节假日前一天
+        is_before_holiday = False
+        holiday_period = []
+        
+        for holiday in holiday_dates:
+            if holiday == today + pd.Timedelta(days=1):  # 明天是节假日
+                is_before_holiday = True
+                # 找到连续的节假日期间
+                current_date = holiday
+                while current_date in holiday_dates:
+                    holiday_period.append(current_date)
+                    current_date += pd.Timedelta(days=1)
+                break
+        
+        if is_before_holiday:
+            # 节假日前一天：提醒节假日期间到期的客户
+            target_dates = holiday_period
+            reminder_type = f"节假日期间到期提醒（{holiday_period[0].strftime('%m月%d日')}至{holiday_period[-1].strftime('%m月%d日')}）"
+            logger.info(f"节假日前一天，提醒节假日期间到期的客户: {target_dates}")
+        elif weekday == 4:  # 周五
+            # 周五：提醒周六和周日到期的客户
+            saturday = today + pd.Timedelta(days=1)
+            sunday = today + pd.Timedelta(days=2)
+            target_dates = [saturday, sunday]
+            reminder_type = "周末到期提醒"
+            logger.info("周五，提醒周末到期的客户")
+        elif weekday < 4:  # 周一到周四
+            # 平时：提醒明天到期的客户
+            tomorrow = today + pd.Timedelta(days=1)
+            target_dates = [tomorrow]
+            reminder_type = "明天到期提醒"
+            logger.info("工作日，提醒明天到期的客户")
+        else:  # 周六、周日
+            # 周末不提醒
+            logger.info("今天是周末，不显示到期客户提醒")
+            return jsonify({
+                'expiring_customers': [], 
+                'message': '周末愉快，暂不显示到期提醒',
+                'today_date': today.strftime('%Y年%m月%d日'),
+                'reminder_type': '周末休息'
+            })
+        
+        # 筛选出目标日期到期的客户
         expiring_customers = []
         for _, row in df.iterrows():
-            if pd.notna(row['版本到期时间']):
+            if pd.notna(row['到期日期']):
                 try:
-                    expiry_date = pd.to_datetime(row['版本到期时间'])
-                    # 如果过期时间在当前日期和一周后之间
-                    if now <= expiry_date <= one_week_later:
+                    expiry_date = pd.to_datetime(row['到期日期']).date()
+                    if expiry_date in target_dates:
+                        # 处理责任销售字段
+                        sales_raw = row.get('续费责任销售', '')
+                        if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                            sales_person = str(row.get('责任销售中英文', ''))
+                        else:
+                            sales_person = str(sales_raw)
+                        
+                        # 计算距离到期的天数
+                        days_until_expiry = (expiry_date - today).days
+                        if days_until_expiry == 0:
+                            date_label = "今天到期"
+                        elif days_until_expiry == 1:
+                            date_label = "明天到期"
+                        else:
+                            date_label = f"{days_until_expiry}天后到期"
+                        
                         expiring_customers.append({
-                            'expiry_date': expiry_date.strftime('%Y年%m月%d日'),
-                            'jdy_account': str(row.get('简道云账号', '')),
-                            'company_name': str(row.get('公司名称', '')),
-                            'sales_person': str(row.get('续费责任销售', ''))
+                            'expiry_date': f"{date_label} ({expiry_date.strftime('%Y年%m月%d日')})",
+                            'jdy_account': str(row.get('用户ID', '')),
+                            'company_name': str(row.get('账号-企业名称', '')),
+                            'sales_person': sales_person,
+                            'days_until_expiry': days_until_expiry
                         })
                 except Exception as e:
                     logger.warning(f"日期转换错误: {str(e)}")
                     continue
         
-        # 按过期日期排序
-        expiring_customers.sort(key=lambda x: x['expiry_date'])
+        # 按到期日期排序
+        expiring_customers.sort(key=lambda x: x['days_until_expiry'])
         
-        logger.info(f"找到{len(expiring_customers)}个即将过期的客户")
-        return jsonify({'expiring_customers': expiring_customers})
+        if len(expiring_customers) == 0:
+            message = f"未来几天没有到期的客户"
+            logger.info(message)
+            return jsonify({
+                'expiring_customers': [], 
+                'message': message,
+                'today_date': today.strftime('%Y年%m月%d日'),
+                'reminder_type': reminder_type
+            })
+        else:
+            logger.info(f"找到{len(expiring_customers)}个即将过期的客户")
+            return jsonify({
+                'expiring_customers': expiring_customers,
+                'today_date': today.strftime('%Y年%m月%d日'),
+                'reminder_type': reminder_type
+            })
 
     except Exception as e:
         logger.error(f"获取即将过期客户失败: {str(e)}")
-        return jsonify({'error': f'获取即将过期客户失败: {str(e)}'}), 500
+        return jsonify({
+            'expiring_customers': [], 
+            'error': f'获取客户信息时出现问题',
+            'today_date': datetime.now().strftime('%Y年%m月%d日'),
+            'reminder_type': '系统错误'
+        })
 
 @app.route('/query_customer', methods=['POST'])
 @login_required
@@ -327,7 +468,7 @@ def query_customer():
             return jsonify({'error': '数据文件读取失败'}), 500
 
         # 检查必要的列是否存在
-        required_columns = ['简道云账号', '公司名称']
+        required_columns = ['用户ID', '账号-企业名称']
         for col in required_columns:
             if col not in df.columns:
                 logger.error(f"Excel文件中缺少'{col}'列")
@@ -335,9 +476,9 @@ def query_customer():
         
         # 根据查询条件进行模糊匹配
         if jdy_id:
-            matching_rows = df[df['简道云账号'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
+            matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
         else:
-            matching_rows = df[df['公司名称'].astype(str).str.contains(str(company_name), case=False, na=False)]
+            matching_rows = df[df['账号-企业名称'].astype(str).str.contains(str(company_name), case=False, na=False)]
             
         if matching_rows.empty:
             query_type = "简道云账号" if jdy_id else "公司名称"
@@ -348,57 +489,59 @@ def query_customer():
         # 处理多条匹配记录
         results = []
         for _, customer_data in matching_rows.iterrows():
-            # 处理版本和相关信息
-            version = str(customer_data.get('版本', ''))
-            company_name = str(customer_data.get('公司名称', ''))
-            customer_type = str(customer_data.get('客户类型', ''))
-            customer_region = str(customer_data.get('客户归属战区', ''))
-            sales = str(customer_data.get('续费责任销售', ''))
-            account_count = str(customer_data.get('账号数量', ''))
-            paid_account_count = str(customer_data.get('付费中账号数量', ''))
+            # 处理新字段映射
+            account_enterprise_name = str(customer_data.get('账号-企业名称', ''))
+            integration_mode = str(customer_data.get('集成模式', ''))
+            customer_classification = str(customer_data.get('客户分类', ''))
             
-            logger.info(f"处理客户数据: {customer_data['简道云账号']}, 公司名称: {company_name}, 客户类型: {customer_type}, "
-                      f"客户归属战区: {customer_region}, 续费责任销售: {sales}, 版本: {version}, "
-                      f"账号数量: {account_count}, 付费中账号数量: {paid_account_count}")
-            
-            # 如果是免费版，不显示到期时间和ARR
-            if '免费' in version:
-                expiry_date = ''
-                arr_display = ''
+            # 处理责任销售字段 - 优先使用续费责任销售，如果为空则使用责任销售中英文
+            sales_raw = customer_data.get('续费责任销售', '')
+            if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                sales = str(customer_data.get('责任销售中英文', ''))
             else:
-                # 处理到期时间
-                expiry_date = ''
-                if '版本到期时间' in customer_data and pd.notna(customer_data['版本到期时间']):
-                    try:
-                        expiry_date = pd.to_datetime(customer_data['版本到期时间']).strftime('%Y年%m月%d日')
-                        logger.info(f"版本到期时间: {expiry_date}")
-                    except Exception as e:
-                        logger.warning(f"日期转换错误: {str(e)}")
-                        expiry_date = ''
-                
-                # 处理ARR
+                sales = str(sales_raw)
+            
+            sales_cn_en = str(customer_data.get('责任销售中英文', ''))
+            jdy_sales = str(customer_data.get('简道云销售', ''))
+            
+            logger.info(f"处理客户数据: {customer_data['用户ID']}, 账号-企业名称: {account_enterprise_name}, "
+                      f"集成模式: {integration_mode}, 客户分类: {customer_classification}, "
+                      f"续费责任销售: {sales}, 责任销售中英文: {sales_cn_en}, 简道云销售: {jdy_sales}")
+            
+            # 处理到期日期
+            expiry_date = ''
+            if '到期日期' in customer_data and pd.notna(customer_data['到期日期']):
                 try:
-                    arr_value = customer_data.get('应续ARR', 0)
-                    if pd.isna(arr_value) or arr_value == '' or float(str(arr_value).replace(',', '')) == 0:
-                        arr_display = '0元'
-                    else:
-                        arr_display = f"{float(str(arr_value).replace(',', ''))}元"
-                    logger.info(f"应续ARR: {arr_display}")
+                    expiry_date = pd.to_datetime(customer_data['到期日期']).strftime('%Y年%m月%d日')
+                    logger.info(f"到期日期: {expiry_date}")
                 except Exception as e:
-                    logger.warning(f"ARR处理错误: {str(e)}")
+                    logger.warning(f"日期转换错误: {str(e)}")
+                    expiry_date = ''
+            
+            # 处理ARR
+            try:
+                arr_value = customer_data.get('应续ARR', 0)
+                if pd.isna(arr_value) or arr_value == '' or float(str(arr_value).replace(',', '')) == 0:
                     arr_display = '0元'
+                else:
+                    arr_display = f"{float(str(arr_value).replace(',', ''))}元"
+                logger.info(f"应续ARR: {arr_display}")
+            except Exception as e:
+                logger.warning(f"ARR处理错误: {str(e)}")
+                arr_display = '0元'
             
             results.append({
-                'company_name': str(customer_data.get('公司名称', '')),
-                'customer_type': str(customer_data.get('客户类型', '')),
-                'customer_region': str(customer_data.get('客户归属战区', '')),
-                'sales': str(customer_data.get('续费责任销售', '')),
-                'jdy_account': str(customer_data.get('简道云账号', '')),
-                'expiry_date': expiry_date,
-                'version': version,
-                'account_count': str(customer_data.get('账号数量', '')),
-                'paid_account_count': str(customer_data.get('付费中账号数量', '')),
-                'uid_arr': arr_display
+                'account_enterprise_name': account_enterprise_name,  # 账号-企业名称
+                'company_name': str(customer_data.get('公司名称', '')),  # 公司名称
+                'tax_number': str(customer_data.get('税号', '')),  # 税号
+                'integration_mode': integration_mode,  # 集成模式
+                'expiry_date': expiry_date,  # 到期日期
+                'uid_arr': arr_display,  # 应续ARR
+                'customer_classification': customer_classification,  # 客户分类
+                'sales': sales,  # 续费责任销售
+                'sales_cn_en': sales_cn_en,  # 责任销售中英文
+                'jdy_sales': jdy_sales,  # 简道云销售
+                'user_id': str(customer_data.get('用户ID', ''))  # 保留用户ID用于兼容
             })
 
         logger.info(f"查询成功，找到{len(results)}条匹配记录")

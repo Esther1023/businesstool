@@ -174,36 +174,34 @@ class SimpleOCR:
             处理结果字典
         """
         try:
-            # 提取文本
-            extracted_text = self.extract_text_from_image(image_data)
-            
-            # 如果没有提取到文本，返回错误信息
-            if not extracted_text:
+            # 检查图片数据
+            if not image_data or len(image_data) < 100:
                 return {
                     'success': False,
-                    'error': 'OCR功能不可用。\n\n要启用真实的图片文字识别功能，请安装以下依赖：\n\n1. 安装Tesseract OCR引擎：\n   brew install tesseract tesseract-lang\n\n2. 安装Python依赖包：\n   pip install pytesseract pillow opencv-python\n\n3. 重启应用\n\n当前系统只能处理已有的文本数据，无法识别图片中的文字。',
+                    'error': '图片数据无效或文件太小',
                     'extracted_text': '',
                     'parsed_fields': {},
                     'field_count': 0,
                     'ocr_available': False
                 }
             
-            # 解析字段
-            parsed_fields = self.parse_text_to_fields(extracted_text)
-            
+            # 直接返回OCR不可用的信息，不尝试提取文本
             return {
-                'success': True,
-                'extracted_text': extracted_text,
-                'parsed_fields': parsed_fields,
-                'field_count': len(parsed_fields),
-                'ocr_available': True
+                'success': False,
+                'error': 'OCR功能不可用。\n\n要启用真实的图片文字识别功能，请安装以下依赖：\n\n1. 安装Tesseract OCR引擎：\n   brew install tesseract tesseract-lang\n\n2. 安装Python依赖包：\n   pip install pytesseract pillow opencv-python\n\n3. 重启应用\n\n当前系统只能处理已有的文本数据，无法识别图片中的文字。',
+                'extracted_text': '',
+                'parsed_fields': {},
+                'field_count': 0,
+                'ocr_available': False,
+                'image_received': True,  # 表示图片已接收
+                'image_size': len(image_data)  # 图片大小
             }
             
         except Exception as e:
-            logger.error(f"图片处理失败: {str(e)}")
+            logger.error(f"处理图片时发生错误: {str(e)}")
             return {
                 'success': False,
-                'error': f'图片处理失败: {str(e)}',
+                'error': f'处理图片时发生错误: {str(e)}',
                 'extracted_text': '',
                 'parsed_fields': {},
                 'field_count': 0,

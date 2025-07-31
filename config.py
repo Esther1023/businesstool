@@ -7,7 +7,7 @@ class Config:
     
     # 文件上传配置
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+    UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
     
     # OCR配置
     OCR_TIMEOUT = 30  # OCR处理超时时间（秒）

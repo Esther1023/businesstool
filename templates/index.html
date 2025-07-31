@@ -112,56 +112,48 @@
                                 <input type="file" id="excelUpload" accept=".xlsx" style="display: none;">
                                 <button type="button" class="btn btn-excel"
                                     onclick="document.getElementById('excelUpload').click()">导入Excel</button>
-                                <button type="button" class="btn btn-shortcut" id="btn-hetiao-inline">朕的业绩</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-hetiao-inline">业绩进度</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-sa-inline">SA后台</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-huikuan-inline">查查回款</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-xiadan-inline">记得接口</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-qiwei-inline">KMS</button>
-                                <button type="button" class="btn btn-shortcut" id="btn-daike-inline">KA看板</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-daike-inline">客户归属</button>
                                 <span id="lastImportTime" class="last-import-time"></span>
                             </div>
                         </div>
                         <div id="customerInfo" class="form-group full-width" style="display: none;">
                             <div class="customer-info-box">
                                 <div class="info-row">
-                                    <label>公司名称：</label>
-                                    <span id="companyName"></span>
+                                    <label>账号-企业名称：</label>
+                                    <span id="accountEnterpriseName"></span>
                                 </div>
                                 <div class="info-row">
-                                    <label>客户类型：</label>
-                                    <span id="customerType"></span>
+                                    <label>集成模式：</label>
+                                    <span id="integrationMode"></span>
                                 </div>
                                 <div class="info-row">
-                                    <label>客户归属战区：</label>
-                                    <span id="customerRegion"></span>
+                                    <label>到期日期：</label>
+                                    <span id="expiryDate"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>应续ARR：</label>
+                                    <span id="uidArr"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>客户分类：</label>
+                                    <span id="customerClassification"></span>
                                 </div>
                                 <div class="info-row">
                                     <label>续费责任销售：</label>
                                     <span id="salesPerson"></span>
                                 </div>
                                 <div class="info-row">
-                                    <label>简道云账号：</label>
-                                    <span id="jdyAccountInfo"></span>
+                                    <label>责任销售中英文：</label>
+                                    <span id="salesCnEn"></span>
                                 </div>
                                 <div class="info-row">
-                                    <label>版本到期时间：</label>
-                                    <span id="expiryDate"></span>
-                                </div>
-                                <div class="info-row">
-                                    <label>版本：</label>
-                                    <span id="version"></span>
-                                </div>
-                                <div class="info-row">
-                                    <label>账号数量：</label>
-                                    <span id="accountCount"></span>
-                                </div>
-                                <div class="info-row">
-                                    <label>付费中账号数量：</label>
-                                    <span id="paidAccountCount"></span>
-                                </div>
-                                <div class="info-row">
-                                    <label>应续ARR：</label>
-                                    <span id="uidArr"></span>
+                                    <label>简道云销售：</label>
+                                    <span id="jdySales"></span>
                                 </div>
                             </div>
                         </div>
@@ -1113,19 +1105,25 @@
                 const customerData = data.results[0];
 
                 // 显示客户信息
-                document.getElementById('companyName').textContent = customerData.company_name || '';
-                document.getElementById('customerType').textContent = customerData.customer_type || '';
-                document.getElementById('customerRegion').textContent = customerData.customer_region || '';
-                document.getElementById('salesPerson').textContent = customerData.sales || '';
-                document.getElementById('jdyAccountInfo').textContent = customerData.jdy_account || '';
+                document.getElementById('accountEnterpriseName').textContent = customerData.account_enterprise_name || '';
+                document.getElementById('integrationMode').textContent = customerData.integration_mode || '';
                 document.getElementById('expiryDate').textContent = customerData.expiry_date || '';
-                document.getElementById('version').textContent = customerData.version || '';
-                document.getElementById('accountCount').textContent = customerData.account_count || '';
-                document.getElementById('paidAccountCount').textContent = customerData.paid_account_count || '';
                 document.getElementById('uidArr').textContent = customerData.uid_arr || '';
+                document.getElementById('customerClassification').textContent = customerData.customer_classification || '';
+                document.getElementById('salesPerson').textContent = customerData.sales || '';
+                document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
+                document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
 
-                // 自动填充公司名称
-                document.querySelector('[name="company_name"]').value = customerData.company_name || '';
+                // 自动填充公司名称（优先使用公司名称，如果为空则使用账号-企业名称）
+                const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan') 
+                    ? customerData.company_name 
+                    : customerData.account_enterprise_name || '';
+                document.querySelector('[name="company_name"]').value = companyNameToUse;
+                
+                // 自动填充税号
+                if (customerData.tax_number && customerData.tax_number !== 'nan') {
+                    document.querySelector('[name="tax_number"]').value = customerData.tax_number;
+                }
 
                 // 显示客户信息框
                 document.getElementById('customerInfo').style.display = 'block';
@@ -1182,20 +1180,29 @@
         // 更新客户信息显示
         function updateCustomerInfo(customerData) {
             // 显示客户信息
-            document.getElementById('companyName').textContent = customerData.company_name || '';
-            document.getElementById('customerType').textContent = customerData.customer_type || '';
-            document.getElementById('customerRegion').textContent = customerData.customer_region || '';
-            document.getElementById('salesPerson').textContent = customerData.sales || '';
-            document.getElementById('jdyAccountInfo').textContent = customerData.jdy_account || '';
+            document.getElementById('accountEnterpriseName').textContent = customerData.account_enterprise_name || '';
+            document.getElementById('integrationMode').textContent = customerData.integration_mode || '';
             document.getElementById('expiryDate').textContent = customerData.expiry_date || '';
-            document.getElementById('version').textContent = customerData.version || '';
-            document.getElementById('accountCount').textContent = customerData.account_count || '';
-            document.getElementById('paidAccountCount').textContent = customerData.paid_account_count || '';
             document.getElementById('uidArr').textContent = customerData.uid_arr || '';
+            document.getElementById('customerClassification').textContent = customerData.customer_classification || '';
+            document.getElementById('salesPerson').textContent = customerData.sales || '';
+            document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
+            document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
 
-            // 自动填充简道云账号
-            if (customerData.jdy_account) {
-                document.querySelector('[name="jdy_account"]').value = customerData.jdy_account;
+            // 自动填充简道云账号（使用用户ID）
+            if (customerData.user_id) {
+                document.querySelector('[name="jdy_account"]').value = customerData.user_id;
+            }
+            
+            // 自动填充公司名称（优先使用公司名称，如果为空则使用账号-企业名称）
+            const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan') 
+                ? customerData.company_name 
+                : customerData.account_enterprise_name || '';
+            document.querySelector('[name="company_name"]').value = companyNameToUse;
+            
+            // 自动填充税号
+            if (customerData.tax_number && customerData.tax_number !== 'nan') {
+                document.querySelector('[name="tax_number"]').value = customerData.tax_number;
             }
 
             // 显示客户信息框

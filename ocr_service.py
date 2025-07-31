@@ -14,25 +14,36 @@ import base64
 import requests
 import json
 
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # 尝试导入OCR相关库，如果失败则使用简化版本
 try:
-    import cv2
+    import cv2  # type: ignore
     import numpy as np
     from PIL import Image
-    import pytesseract
+    import pytesseract  # type: ignore
     OCR_AVAILABLE = True
-except ImportError:
+    logger.info("完整OCR库导入成功")
+except ImportError as e:
     OCR_AVAILABLE = False
+    logger.warning(f"OCR库导入失败: {str(e)}")
+    # 创建占位符以避免NameError
+    cv2 = None
+    np = None
+    Image = None
+    pytesseract = None
+    
     # 导入简化版本
     try:
         from simple_ocr import SimpleOCR
         SIMPLE_OCR_AVAILABLE = True
-    except ImportError:
+        logger.info("简化OCR库导入成功")
+    except ImportError as e:
         SIMPLE_OCR_AVAILABLE = False
-
-# 配置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+        logger.warning(f"简化OCR库导入失败: {str(e)}")
+        SimpleOCR = None
 
 class OCRService:
     """OCR服务类"""
@@ -46,45 +57,57 @@ class OCRService:
         else:
             self.simple_ocr = None
 
-        # 字段映射配置 - 支持多种表达方式
+        # 字段映射配置 - 专门针对用户需要的6个关键字段优化
         self.field_mapping = {
             'company_name': [
                 '公司名称', '甲方', '甲方名称', '企业名称', '单位名称', 
-                '公司', '企业', '单位', '名称', '机构名称'
+                '公司', '企业', '单位', '名称', '机构名称', '企业法人营业执照',
+                '营业执照', '法人名称', '企业法人', '法人单位', '经营者',
+                '商户名称', '店铺名称', '商家名称', '机构', '组织名称',
+                '全称', '企业全称', '公司全称', '单位全称', '法人'
             ],
             'tax_number': [
                 '税号', '纳税人识别号', '统一社会信用代码', '税务登记号',
-                '纳税识别号', '信用代码', '社会信用代码'
+                '纳税识别号', '信用代码', '社会信用代码', '统一代码',
+                '社会信用代码号', '信用代码号', '税务号', '纳税号',
+                '识别号', '登记号', '代码', '编号', '证件号码'
             ],
             'reg_address': [
                 '注册地址', '地址', '注册地', '企业地址', '公司地址',
-                '营业地址', '办公地址', '联系地址'
+                '营业地址', '办公地址', '联系地址', '住所', '经营场所',
+                '注册住所', '企业住所', '经营地址', '营业场所', '办公场所',
+                '详细地址', '具体地址', '所在地', '位置', '场所'
             ],
             'reg_phone': [
                 '注册电话', '电话', '联系电话', '固定电话', '办公电话',
-                '公司电话', '座机', '固话'
+                '公司电话', '座机', '固话', '注册电话号码', '企业电话',
+                '电话号码', '联系号码', '办公号码', '固定号码', '座机号码',
+                '固话号码', '企业联系电话', '公司联系电话', '办公室电话'
             ],
             'bank_name': [
                 '开户行', '开户银行', '银行', '开户行名称', '银行名称',
-                '基本户开户行', '基本账户开户行'
+                '基本户开户行', '基本账户开户行', '开户机构', '银行机构',
+                '开户银行名称', '银行全称', '开户行全称', '金融机构',
+                '存款银行', '账户银行', '银行支行', '分行', '支行'
             ],
             'bank_account': [
                 '账号', '银行账号', '账户', '银行账户', '基本户账号',
                 '对公账号', '基本账户', '开户账号', '银行卡号', '卡号',
-                '账户号码', '银行账户号', '账户号'
+                '账户号码', '银行账户号', '账户号', '帐号', '帐户',
+                '银行卡账号', '存款账号', '账户编号', '卡号码', '户号'
             ],
             'contact_name': [
                 '联系人', '联系人姓名', '负责人', '经办人', '联系人名称',
-                '法人', '法定代表人', '代表人'
+                '法人', '法定代表人', '代表人', '法人代表', '企业法人'
             ],
             'contact_phone': [
                 '联系人电话', '手机', '手机号', '移动电话', '联系方式',
                 '联系人手机', '手机号码', '电话号码', '联系电话', '电话',
-                '手机号：', '联系人手机号', '移动号码', '手机：'
+                '手机号：', '联系人手机号', '移动号码', '手机：', '联系人手机号码'
             ],
             'mail_address': [
                 '邮寄地址', '收件地址', '快递地址', '邮件地址', '寄送地址',
-                '收货地址', '通讯地址'
+                '收货地址', '通讯地址', '邮政地址', '快递收件地址'
             ],
             'jdy_account': [
                 '简道云账号', '简道云ID', 'JDY账号', 'JDY_ID', '账号ID',
@@ -106,7 +129,7 @@ class OCRService:
         Returns:
             处理后的图片数组或原始数据
         """
-        if not OCR_AVAILABLE:
+        if not OCR_AVAILABLE or cv2 is None or np is None:
             return image_data
 
         try:
@@ -151,7 +174,7 @@ class OCRService:
         Returns:
             提取的文本内容
         """
-        if not OCR_AVAILABLE:
+        if not OCR_AVAILABLE or pytesseract is None:
             logger.warning("OCR库未安装，使用演示模式。请安装 pytesseract, pillow, opencv-python 以启用真实OCR功能")
             # 返回空字符串，让用户知道OCR不可用
             return ""
@@ -173,16 +196,64 @@ class OCRService:
             if processed_img is None:
                 raise ValueError("图片处理失败")
 
-            # 配置Tesseract参数
-            custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz一二三四五六七八九十百千万亿零壹贰叁肆伍陆柒捌玖拾佰仟萬億〇（）()【】[]{}《》<>""''：:；;，,。.？?！!、\|/\\-_=+*&%$#@^~`'
-
+            # 配置Tesseract参数 - 增强字符识别范围和准确性
+            # 包含所有数字、大小写英文字母、中文字符、常用标点符号
+            custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
+            
             # 使用Tesseract进行OCR识别
-            # 尝试中英文混合识别
-            text = pytesseract.image_to_string(
-                processed_img,
-                lang='chi_sim+eng',  # 中文简体+英文
-                config=custom_config
-            )
+            # 尝试多种语言组合以提高识别准确率
+            text_results = []
+            
+            # 方法1: 中英文混合识别 - 主要方法
+            try:
+                text1 = pytesseract.image_to_string(
+                    processed_img,
+                    lang='chi_sim+eng',  # 中文简体+英文
+                    config=custom_config
+                )
+                text_results.append(text1)
+                logger.info(f"中英文混合识别结果长度: {len(text1)}")
+            except Exception as e:
+                logger.warning(f"中英文混合识别失败: {str(e)}")
+            
+            # 方法2: 纯英文识别（对数字和英文字母更准确）
+            try:
+                text2 = pytesseract.image_to_string(
+                    processed_img,
+                    lang='eng',
+                    config=custom_config + ' -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()[]{}:;,.-_=+*&%$#@^~`/\\ '
+                )
+                text_results.append(text2)
+                logger.info(f"纯英文识别结果长度: {len(text2)}")
+            except Exception as e:
+                logger.warning(f"纯英文识别失败: {str(e)}")
+            
+            # 方法3: 数字优化识别
+            try:
+                text3 = pytesseract.image_to_string(
+                    processed_img,
+                    lang='eng',
+                    config='--oem 3 --psm 8 -c tessedit_char_whitelist=0123456789'
+                )
+                text_results.append(text3)
+                logger.info(f"数字优化识别结果长度: {len(text3)}")
+            except Exception as e:
+                logger.warning(f"数字优化识别失败: {str(e)}")
+            
+            # 方法4: 单行文本识别模式
+            try:
+                text4 = pytesseract.image_to_string(
+                    processed_img,
+                    lang='chi_sim+eng',
+                    config='--oem 3 --psm 7'  # 单行文本模式
+                )
+                text_results.append(text4)
+                logger.info(f"单行文本识别结果长度: {len(text4)}")
+            except Exception as e:
+                logger.warning(f"单行文本识别失败: {str(e)}")
+            
+            # 合并识别结果
+            text = self._merge_ocr_results(text_results)
 
             # 清理文本
             text = self._clean_text(text)
@@ -203,6 +274,14 @@ class OCRService:
 
         Returns:
             提取的文本内容
+        """
+        logger.warning("在线OCR服务当前不可用")
+        logger.info("免费的OCR.space API服务可能暂时不可用或已达到使用限制")
+        
+        # 直接返回空字符串，让系统使用简化OCR服务
+        return ""
+        
+        # 注释掉原来的在线OCR实现，因为免费服务不稳定
         """
         try:
             # 使用免费的OCR.space API
@@ -251,6 +330,7 @@ class OCRService:
         except Exception as e:
             logger.error(f"在线OCR处理异常: {str(e)}")
             return ""
+        """
 
     def _get_demo_text(self) -> str:
         """
@@ -284,7 +364,7 @@ class OCRService:
         text = re.sub(r'\s+', ' ', text)
         
         # 移除特殊字符但保留中文标点
-        text = re.sub(r'[^\w\s\u4e00-\u9fff：:=（）()【】\[\]{}《》<>""''；;，,。.？?！!\|/\\-_+*&%$#@^~`]', '', text)
+        text = re.sub(r'[^\w\s\u4e00-\u9fff：:=（）()【】\[\]{}《》<>""''；;，,。.？?！!|/\\-_+*&%$#@^~`]', '', text)
         
         # 修复常见OCR错误
         replacements = {
@@ -296,9 +376,64 @@ class OCRService:
         # 只在特定上下文中进行替换
         for old, new in replacements.items():
             # 在数字上下文中进行替换
-            text = re.sub(f'(?<=\d){old}(?=\d)', new, text)
+            text = re.sub(rf'(?<=\d){old}(?=\d)', new, text)
         
         return text.strip()
+    
+    def _merge_ocr_results(self, text_results: List[str]) -> str:
+        """
+        合并多个OCR识别结果，选择最佳结果
+        
+        Args:
+            text_results: OCR识别结果列表
+            
+        Returns:
+            合并后的最佳文本
+        """
+        if not text_results:
+            return ""
+        
+        # 过滤空结果
+        valid_results = [text.strip() for text in text_results if text.strip()]
+        
+        if not valid_results:
+            return ""
+        
+        if len(valid_results) == 1:
+            return valid_results[0]
+        
+        # 选择最长的结果作为主要结果
+        main_result = max(valid_results, key=len)
+        
+        # 从其他结果中提取可能遗漏的数字和关键信息
+        all_numbers = set()
+        all_phones = set()
+        all_accounts = set()
+        
+        for result in valid_results:
+            # 提取数字序列
+            numbers = re.findall(r'\d{3,}', result)
+            all_numbers.update(numbers)
+            
+            # 提取手机号
+            phones = re.findall(r'1[3-9]\d{9}', result)
+            all_phones.update(phones)
+            
+            # 提取可能的账号
+            accounts = re.findall(r'\d{10,25}', result)
+            all_accounts.update(accounts)
+        
+        # 将提取的关键信息补充到主结果中
+        supplementary_info = []
+        
+        for number in all_numbers:
+            if number not in main_result:
+                supplementary_info.append(number)
+        
+        if supplementary_info:
+            main_result += "\n" + "\n".join(supplementary_info)
+        
+        return main_result
     
     def parse_text_to_fields(self, text: str) -> Dict[str, str]:
         """
@@ -392,6 +527,8 @@ class OCRService:
         if field_name == 'contact_phone':
             # 电话号码清理：保留数字、+、-、空格、()
             value = re.sub(r'[^\d+\-\s()]', '', value)
+            # 修复常见的OCR识别错误
+            value = self._fix_ocr_errors(value, 'phone')
             # 移除多余的空格
             value = re.sub(r'\s+', ' ', value).strip()
             # 验证电话号码格式（至少7位数字）
@@ -401,11 +538,20 @@ class OCRService:
         elif field_name == 'bank_account':
             # 银行账号清理：只保留数字和空格
             value = re.sub(r'[^\d\s]', '', value)
+            # 修复常见的OCR识别错误
+            value = self._fix_ocr_errors(value, 'number')
             # 移除空格
             value = re.sub(r'\s+', '', value)
             # 验证账号长度（至少10位数字）
             if not re.match(r'^\d{10,}$', value):
                 return ""
+
+        elif field_name == 'tax_number':
+            # 税号清理：保留字母和数字
+            value = re.sub(r'[^A-Za-z0-9]', '', value)
+            value = value.upper()
+            # 修复常见的OCR识别错误
+            value = self._fix_ocr_errors(value, 'tax_number')
 
         elif field_name == 'jdy_account':
             # 简道云账号清理：保留字母、数字、下划线
@@ -416,9 +562,57 @@ class OCRService:
 
         return value
 
+    def _fix_ocr_errors(self, text: str, field_type: str) -> str:
+        """
+        修复常见的OCR识别错误
+        
+        Args:
+            text: 原始文本
+            field_type: 字段类型 ('tax_number', 'phone', 'number')
+            
+        Returns:
+            修复后的文本
+        """
+        if not text:
+            return text
+        
+        # 常见的OCR字符识别错误映射
+        char_fixes = {
+            'O': '0',  # 字母O -> 数字0
+            'o': '0',  # 小写o -> 数字0
+            'I': '1',  # 字母I -> 数字1
+            'l': '1',  # 小写l -> 数字1
+            'S': '5',  # 字母S -> 数字5 (在某些情况下)
+            'Z': '2',  # 字母Z -> 数字2 (在某些情况下)
+            'B': '8',  # 字母B -> 数字8 (在某些情况下)
+            'G': '6',  # 字母G -> 数字6 (在某些情况下)
+        }
+        
+        fixed_text = text
+        
+        if field_type in ['phone', 'number']:
+            # 对于纯数字字段，修复所有字母到数字的错误
+            for wrong_char, correct_char in char_fixes.items():
+                fixed_text = fixed_text.replace(wrong_char, correct_char)
+        elif field_type == 'tax_number':
+            # 对于税号，只修复明显的数字位置的错误
+            # 统一社会信用代码：前2位是数字，第3-8位是字母数字混合，后10位是数字
+            if len(fixed_text) == 18:
+                # 修复前2位（应该是数字）
+                for i in range(2):
+                    if i < len(fixed_text) and fixed_text[i] in char_fixes:
+                        fixed_text = fixed_text[:i] + char_fixes[fixed_text[i]] + fixed_text[i+1:]
+                
+                # 修复后10位（应该是数字）
+                for i in range(8, 18):
+                    if i < len(fixed_text) and fixed_text[i] in char_fixes:
+                        fixed_text = fixed_text[:i] + char_fixes[fixed_text[i]] + fixed_text[i+1:]
+        
+        return fixed_text
+
     def _pattern_match_fields(self, text: str, existing_result: Dict[str, str]) -> Dict[str, str]:
         """
-        使用正则表达式模式匹配字段
+        使用正则表达式模式匹配字段 - 专门针对用户需要的6个关键字段优化
 
         Args:
             text: 完整文本
@@ -429,40 +623,226 @@ class OCRService:
         """
         result = existing_result.copy()
 
-        # 如果还没有找到联系电话，尝试模式匹配
-        if 'contact_phone' not in result:
-            # 匹配手机号模式：1开头的11位数字
-            phone_pattern = r'1[3-9]\d{9}'
-            phone_match = re.search(phone_pattern, text)
-            if phone_match:
-                result['contact_phone'] = phone_match.group()
-                logger.info(f"模式匹配手机号: {phone_match.group()}")
-
-        # 如果还没有找到银行账号，尝试模式匹配
-        if 'bank_account' not in result:
-            # 匹配银行账号模式：10-25位数字
-            account_pattern = r'\b\d{10,25}\b'
-            account_matches = re.findall(account_pattern, text)
-            if account_matches:
-                # 选择最长的数字串作为账号
-                longest_account = max(account_matches, key=len)
-                result['bank_account'] = longest_account
-                logger.info(f"模式匹配银行账号: {longest_account}")
-
-        # 如果还没有找到简道云账号，尝试模式匹配
-        if 'jdy_account' not in result:
-            # 匹配简道云账号模式：字母数字组合，长度3-50
-            jdy_pattern = r'\b[a-zA-Z0-9]{3,50}\b'
-            jdy_matches = re.findall(jdy_pattern, text)
-            if jdy_matches:
-                # 过滤掉纯数字（可能是其他字段）
-                for match in jdy_matches:
-                    if not match.isdigit() and len(match) >= 5:
-                        result['jdy_account'] = match
-                        logger.info(f"模式匹配简道云账号: {match}")
+        # 1. 智能识别公司名称 - 最高优先级
+        if 'company_name' not in result:
+            company_patterns = [
+                # 直接标识的公司名称
+                r'公司名称[：:\s]*([^\n\r]+?)(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                r'企业名称[：:\s]*([^\n\r]+?)(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                r'名\s*称[：:\s]*([^\n\r]+?)(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                r'甲方[：:\s]*([^\n\r]+?)(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                r'法人[：:\s]*([^\n\r]+?)(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                # 包含公司关键词的名称
+                r'([^\n\r]*?(?:有限公司|股份有限公司|集团有限公司|科技有限公司|贸易有限公司|投资有限公司|实业有限公司|发展有限公司|建设有限公司|工程有限公司|咨询有限公司|服务有限公司|管理有限公司))(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                r'([^\n\r]*?(?:公司|企业|集团|中心|研究院|工厂|厂|店|社|部|局|委|会))(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)',
+                # 营业执照第一行通常是公司名称
+                r'^([^\n\r]*?(?:有限公司|股份有限公司|集团|企业|公司|中心|研究院|工厂)[^\n\r]*?)$',
+                # 通用模式：不包含数字开头的长文本
+                r'^([^\n\r\d][^\n\r]{6,50}?)(?=\s*税号|\s*统一社会信用代码|\s*地址|\s*$)'
+            ]
+            
+            for pattern in company_patterns:
+                company_match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+                if company_match:
+                    company_name = company_match.group(1).strip()
+                    # 严格过滤：长度、内容、格式检查
+                    if (len(company_name) >= 4 and len(company_name) <= 100 and 
+                        not any(word in company_name for word in ['税号', '地址', '电话', '账号', '银行', '开户行', '代码']) and 
+                        not re.match(r'^\d+$', company_name) and
+                        not re.match(r'^[0-9A-Z]{15,18}$', company_name)):  # 排除税号
+                        company_name = re.sub(r'^[：:\s]+|[：:\s]+$', '', company_name)
+                        result['company_name'] = company_name
+                        logger.info(f"智能识别公司名称: {company_name}")
                         break
 
+        # 2. 智能识别税号（统一社会信用代码）- 高优先级
+        if 'tax_number' not in result:
+            tax_patterns = [
+                # 直接标识的税号
+                r'税号[：:\s]*([A-Z0-9]{15,18})',
+                r'统一社会信用代码[：:\s]*([A-Z0-9]{15,18})',
+                r'信用代码[：:\s]*([A-Z0-9]{15,18})',
+                r'纳税人识别号[：:\s]*([A-Z0-9]{15,18})',
+                r'代码[：:\s]*([A-Z0-9]{15,18})',
+                r'编号[：:\s]*([A-Z0-9]{15,18})',
+                # 标准格式匹配
+                r'9[0-9A-HJ-NPQRTUWXY]{17}',  # 18位统一社会信用代码
+                r'[0-9A-HJ-NPQRTUWXY]{18}',   # 18位统一社会信用代码（不限开头）
+                r'\d{15}',                     # 15位旧版税号
+                r'[0-9A-Z]{15,18}',           # 15-18位字母数字组合
+                # 宽松匹配
+                r'[A-Z0-9]{15,18}'
+            ]
+            
+            for pattern in tax_patterns:
+                tax_matches = re.findall(pattern, text.upper())
+                for tax_number in tax_matches:
+                    # 修复OCR错误并验证税号格式
+                    tax_number = self._fix_ocr_errors(tax_number, 'tax_number')
+                    if self._validate_tax_number(tax_number):
+                        result['tax_number'] = tax_number
+                        logger.info(f"智能识别税号: {tax_number}")
+                        break
+                if 'tax_number' in result:
+                    break
+
+        # 3. 智能识别注册地址 - 高优先级
+        if 'reg_address' not in result:
+            address_patterns = [
+                # 直接标识的地址
+                r'注册地址[：:\s]*([^\n\r]+?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                r'地址[：:\s]*([^\n\r]+?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                r'住所[：:\s]*([^\n\r]+?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                r'详细地址[：:\s]*([^\n\r]+?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                r'具体地址[：:\s]*([^\n\r]+?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                # 包含地理标识的地址
+                r'([^\n\r]*?(?:省|市|区|县|街|路|号|栋|楼|室|层|村|镇|乡)[^\n\r]*?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                # 主要城市地址
+                r'([^\n\r]*?(?:北京|上海|天津|重庆|广东|江苏|浙江|山东|河南|四川|湖北|湖南|河北|福建|安徽|陕西|辽宁|山西|黑龙江|吉林|江西|广西|云南|贵州|甘肃|海南|青海|宁夏|新疆|西藏|内蒙古)[^\n\r]*?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)',
+                r'([^\n\r]*?(?:昆明|北京|上海|广州|深圳|杭州|南京|成都|武汉|西安|郑州|济南|福州|合肥|长沙|石家庄|太原|沈阳|长春|哈尔滨|南昌|南宁|贵阳|兰州|海口|西宁|银川|乌鲁木齐|拉萨|呼和浩特)[^\n\r]*?)(?=\s*电话|\s*开户行|\s*银行|\s*账号|\s*$)'
+            ]
+            
+            for pattern in address_patterns:
+                address_match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+                if address_match:
+                    address = address_match.group(1).strip()
+                    # 严格过滤：长度、内容检查
+                    if (len(address) >= 8 and len(address) <= 200 and 
+                        not any(word in address for word in ['税号', '电话', '账号', '银行', '公司名称', '开户行']) and
+                        not re.match(r'^\d+$', address) and
+                        not re.match(r'^[0-9A-Z]{15,18}$', address)):  # 排除税号
+                        address = re.sub(r'^[：:\s]+|[：:\s]+$', '', address)
+                        result['reg_address'] = address
+                        logger.info(f"智能识别注册地址: {address}")
+                        break
+
+        # 4. 智能识别注册电话（固定电话）- 中优先级
+        if 'reg_phone' not in result:
+            phone_patterns = [
+                # 直接标识的电话
+                r'注册电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
+                r'固定电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
+                r'座机[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
+                r'电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
+                r'办公电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
+                r'公司电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
+                # 标准固话格式
+                r'\b(0\d{2,3}[-\s]?\d{7,8})\b',
+                r'\b(\d{3,4}[-\s]?\d{7,8})\b',
+                r'\b(400[-\s]?\d{3}[-\s]?\d{4})\b',  # 400电话
+                r'\b(800[-\s]?\d{3}[-\s]?\d{4})\b'   # 800电话
+            ]
+            
+            for pattern in phone_patterns:
+                phone_match = re.search(pattern, text)
+                if phone_match:
+                    phone = phone_match.group(1) if '：' in pattern or ':' in pattern else phone_match.group()
+                    # 修复OCR错误
+                    phone = self._fix_ocr_errors(phone, 'phone')
+                    # 确保不是手机号
+                    clean_phone = re.sub(r'[^\d]', '', phone)
+                    if not (len(clean_phone) == 11 and clean_phone.startswith('1')):
+                        result['reg_phone'] = phone
+                        logger.info(f"智能识别注册电话: {phone}")
+                        break
+
+        # 5. 智能识别开户行 - 中优先级
+        if 'bank_name' not in result:
+            bank_patterns = [
+                # 直接标识的银行
+                r'开户行[：:\s]*([^\n\r]*?(?:银行|农村信用社|邮政储蓄|信用合作社)[^\n\r]*?)(?=\s*账号|\s*帐号|\s*$)',
+                r'银行[：:\s]*([^\n\r]*?(?:银行|农村信用社|邮政储蓄|信用合作社)[^\n\r]*?)(?=\s*账号|\s*帐号|\s*$)',
+                r'开户银行[：:\s]*([^\n\r]*?(?:银行|农村信用社|邮政储蓄|信用合作社)[^\n\r]*?)(?=\s*账号|\s*帐号|\s*$)',
+                # 主要银行名称匹配
+                r'([^\n\r]*?(?:中国工商银行|中国农业银行|中国银行|中国建设银行|交通银行|招商银行|浦发银行|中信银行|中国光大银行|华夏银行|中国民生银行|广发银行|平安银行|兴业银行|上海银行|北京银行|宁波银行|南京银行)[^\n\r]*?)(?=\s*账号|\s*帐号|\s*$)',
+                r'([^\n\r]*?(?:工商银行|农业银行|建设银行|中国银行|交通银行|招商银行|浦发银行|中信银行|光大银行|华夏银行|民生银行|广发银行|平安银行|兴业银行)[^\n\r]*?)(?=\s*账号|\s*帐号|\s*$)',
+                # 通用银行匹配
+                r'([^\n\r]*?(?:银行|农村信用社|邮政储蓄|信用合作社)[^\n\r]*?)(?=\s*账号|\s*帐号|\s*$)',
+                r'([^\n\r]*银行[^\n\r]*)',
+                r'([^\n\r]*信用社[^\n\r]*)',
+                r'([^\n\r]*邮政储蓄[^\n\r]*)'
+            ]
+            
+            for pattern in bank_patterns:
+                bank_match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+                if bank_match:
+                    bank_name = bank_match.group(1).strip()
+                    # 严格过滤：长度、内容检查
+                    if (len(bank_name) >= 4 and len(bank_name) <= 100 and 
+                        not any(word in bank_name for word in ['税号', '地址', '电话', '公司名称']) and
+                        not re.match(r'^\d+$', bank_name) and
+                        not re.match(r'^[0-9A-Z]{15,18}$', bank_name)):  # 排除税号
+                        bank_name = re.sub(r'^[：:\s]+|[：:\s]+$', '', bank_name)
+                        result['bank_name'] = bank_name
+                        logger.info(f"智能识别开户行: {bank_name}")
+                        break
+
+        # 6. 智能识别银行账号 - 中优先级
+        if 'bank_account' not in result:
+            account_patterns = [
+                # 直接标识的账号
+                r'账号[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
+                r'帐号[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
+                r'银行账号[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
+                r'银行账户[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
+                r'账号[：:\s]*(\d{10,25})',
+                r'帐号[：:\s]*(\d{10,25})',
+                r'银行账号[：:\s]*(\d{10,25})',
+                r'银行账户[：:\s]*(\d{10,25})',
+                # 标准账号格式
+                r'\b(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})\b',  # 4-4-4-4+格式
+                r'\b(\d{10,25})\b',                                  # 连续10-25位数字
+                r'\b(\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4})\b',       # 标准4-4-4-4格式
+                r'\b(\d{6}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4})\b'     # 6-4-4-4格式
+            ]
+            
+            account_candidates = []
+            for pattern in account_patterns:
+                matches = re.findall(pattern, text)
+                for match in matches:
+                    # 清理账号（去掉空格和分隔符）
+                    clean_account = re.sub(r'[^\d]', '', match)
+                    # 修复OCR错误
+                    clean_account = self._fix_ocr_errors(clean_account, 'number')
+                    if 10 <= len(clean_account) <= 25:
+                        # 排除手机号（11位且以1开头）和税号
+                        if (not (len(clean_account) == 11 and clean_account.startswith('1')) and
+                            not (len(clean_account) in [15, 18] and clean_account.isdigit())):
+                            account_candidates.append(clean_account)
+            
+            if account_candidates:
+                # 选择最长的作为银行账号（通常更准确）
+                best_account = max(account_candidates, key=len)
+                result['bank_account'] = best_account
+                logger.info(f"智能识别银行账号: {best_account}")
+
         return result
+    
+    def _validate_tax_number(self, tax_number: str) -> bool:
+        """
+        验证税号格式是否正确
+        
+        Args:
+            tax_number: 税号
+            
+        Returns:
+            是否为有效税号
+        """
+        if not tax_number:
+            return False
+        
+        # 18位统一社会信用代码验证
+        if len(tax_number) == 18:
+            # 第一位应该是数字或大写字母（除I、O、S、V、Z）
+            if not re.match(r'^[0-9A-HJ-NPQRTUWXY]', tax_number.upper()):
+                return False
+            return True
+        
+        # 15位旧版税号验证
+        if len(tax_number) == 15:
+            return tax_number.isdigit()
+        
+        return False
     
     def process_image(self, image_data: bytes) -> Dict[str, any]:
         """
@@ -497,14 +877,16 @@ class OCRService:
                 extracted_text = self.extract_text_from_image(image_data)
             except Exception as e:
                 logger.error(f"Tesseract OCR引擎不可用: {str(e)}")
-                logger.info("尝试使用在线OCR服务...")
-                # 尝试使用在线OCR服务
-                extracted_text = self._try_online_ocr(image_data)
-
-                if not extracted_text:
+                logger.info("Tesseract不可用，尝试使用简化OCR服务...")
+                
+                # 直接使用简化OCR服务，不再尝试在线OCR
+                if self.simple_ocr:
+                    logger.info("使用简化OCR服务处理图片")
+                    return self.simple_ocr.process_image(image_data)
+                else:
                     return {
                         'success': False,
-                        'error': f'OCR识别失败。Tesseract不可用且在线OCR服务也失败。\n\n请安装Tesseract OCR引擎：\n\n方案1（推荐）：\nbrew install tesseract tesseract-lang\n\n方案2：\nconda install -c conda-forge tesseract\n\n安装完成后重启应用。',
+                        'error': 'OCR识别失败。Tesseract不可用且简化OCR服务也不可用。\n\n请安装Tesseract OCR引擎：\n\n方案1（推荐）：\nbrew install tesseract tesseract-lang\n\n方案2：\nconda install -c conda-forge tesseract\n\n安装完成后重启应用。',
                         'extracted_text': '',
                         'parsed_fields': {},
                         'field_count': 0,
