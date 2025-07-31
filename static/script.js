@@ -17,7 +17,7 @@ function fetchExpiringCustomers() {
                 showExpiringCustomersAlert([], '暂时无法获取客户信息', todayDate, reminderType);
             } else {
                 // 默认情况：没有到期客户
-                showExpiringCustomersAlert([], '✅ 近期没有客户到期', todayDate, reminderType);
+                showExpiringCustomersAlert([], '😊 近期没有客户到期', todayDate, reminderType);
             }
         })
         .catch(error => {
@@ -148,7 +148,7 @@ function showExpiringCustomersAlert(customers, message = null, todayDate = '', r
         noCustomerDiv.className = 'expiring-customer-item';
         noCustomerDiv.innerHTML = `
             <div style="display: flex; align-items: center; padding: 8px 0;">
-                <span style="margin-right: 8px;">✅</span>
+                <span style="margin-right: 8px;">😊</span>
                 <span style="color: var(--text-color); font-size: 14px;">近期没有客户到期</span>
             </div>
         `;
