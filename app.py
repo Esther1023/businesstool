@@ -411,7 +411,16 @@ def get_expiring_customers():
         expiring_customers.sort(key=lambda x: x['days_until_expiry'])
         
         if len(expiring_customers) == 0:
-            message = f"未来几天没有到期的客户"
+            # 根据提醒类型显示更具体的信息
+            if reminder_type == "明天到期提醒":
+                message = "✅ 明天没有客户到期，可以安心休息"
+            elif reminder_type == "周末到期提醒":
+                message = "✅ 这个周末没有客户到期，享受愉快周末"
+            elif "节假日期间到期提醒" in reminder_type:
+                message = f"✅ {reminder_type.split('（')[1].split('）')[0]}期间没有客户到期"
+            else:
+                message = "✅ 近期没有客户到期"
+            
             logger.info(message)
             return jsonify({
                 'expiring_customers': [], 
