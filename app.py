@@ -673,7 +673,7 @@ def parse_text():
         
         # 使用OCR服务的文本解析功能
         if ocr_service:
-            parsed_fields = ocr_service.parse_text_fields(text)
+            parsed_fields = ocr_service.parse_text_to_fields(text)
             logger.info(f"文本解析成功，识别到 {len(parsed_fields)} 个字段")
             return jsonify({
                 'success': True,

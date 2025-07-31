@@ -57,7 +57,7 @@ class OCRService:
         else:
             self.simple_ocr = None
 
-        # 字段映射配置 - 专门针对用户需要的6个关键字段优化
+        # 字段映射配置 - 只保留4个关键字段
         self.field_mapping = {
             'company_name': [
                 '公司名称', '甲方', '甲方名称', '企业名称', '单位名称', 
@@ -78,41 +78,11 @@ class OCRService:
                 '注册住所', '企业住所', '经营地址', '营业场所', '办公场所',
                 '详细地址', '具体地址', '所在地', '位置', '场所'
             ],
-            'reg_phone': [
-                '注册电话', '电话', '联系电话', '固定电话', '办公电话',
-                '公司电话', '座机', '固话', '注册电话号码', '企业电话',
-                '电话号码', '联系号码', '办公号码', '固定号码', '座机号码',
-                '固话号码', '企业联系电话', '公司联系电话', '办公室电话'
-            ],
             'bank_name': [
                 '开户行', '开户银行', '银行', '开户行名称', '银行名称',
                 '基本户开户行', '基本账户开户行', '开户机构', '银行机构',
                 '开户银行名称', '银行全称', '开户行全称', '金融机构',
                 '存款银行', '账户银行', '银行支行', '分行', '支行'
-            ],
-            'bank_account': [
-                '账号', '银行账号', '账户', '银行账户', '基本户账号',
-                '对公账号', '基本账户', '开户账号', '银行卡号', '卡号',
-                '账户号码', '银行账户号', '账户号', '帐号', '帐户',
-                '银行卡账号', '存款账号', '账户编号', '卡号码', '户号'
-            ],
-            'contact_name': [
-                '联系人', '联系人姓名', '负责人', '经办人', '联系人名称',
-                '法人', '法定代表人', '代表人', '法人代表', '企业法人'
-            ],
-            'contact_phone': [
-                '联系人电话', '手机', '手机号', '移动电话', '联系方式',
-                '联系人手机', '手机号码', '电话号码', '联系电话', '电话',
-                '手机号：', '联系人手机号', '移动号码', '手机：', '联系人手机号码'
-            ],
-            'mail_address': [
-                '邮寄地址', '收件地址', '快递地址', '邮件地址', '寄送地址',
-                '收货地址', '通讯地址', '邮政地址', '快递收件地址'
-            ],
-            'jdy_account': [
-                '简道云账号', '简道云ID', 'JDY账号', 'JDY_ID', '账号ID',
-                '用户ID', '客户ID', '系统账号', '简道云', 'JDY',
-                '简道云用户', '简道云客户', '云账号', '平台账号'
             ]
         }
         
@@ -524,41 +494,12 @@ class OCRService:
         # 移除常见的无用字符
         value = re.sub(r'^[：:=\s]+|[：:=\s]+$', '', value)
 
-        if field_name == 'contact_phone':
-            # 电话号码清理：保留数字、+、-、空格、()
-            value = re.sub(r'[^\d+\-\s()]', '', value)
-            # 修复常见的OCR识别错误
-            value = self._fix_ocr_errors(value, 'phone')
-            # 移除多余的空格
-            value = re.sub(r'\s+', ' ', value).strip()
-            # 验证电话号码格式（至少7位数字）
-            if not re.search(r'\d{7,}', value):
-                return ""
-
-        elif field_name == 'bank_account':
-            # 银行账号清理：只保留数字和空格
-            value = re.sub(r'[^\d\s]', '', value)
-            # 修复常见的OCR识别错误
-            value = self._fix_ocr_errors(value, 'number')
-            # 移除空格
-            value = re.sub(r'\s+', '', value)
-            # 验证账号长度（至少10位数字）
-            if not re.match(r'^\d{10,}$', value):
-                return ""
-
-        elif field_name == 'tax_number':
+        if field_name == 'tax_number':
             # 税号清理：保留字母和数字
             value = re.sub(r'[^A-Za-z0-9]', '', value)
             value = value.upper()
             # 修复常见的OCR识别错误
             value = self._fix_ocr_errors(value, 'tax_number')
-
-        elif field_name == 'jdy_account':
-            # 简道云账号清理：保留字母、数字、下划线
-            value = re.sub(r'[^\w]', '', value)
-            # 验证账号格式（至少3位字符）
-            if len(value) < 3:
-                return ""
 
         return value
 
@@ -568,7 +509,7 @@ class OCRService:
         
         Args:
             text: 原始文本
-            field_type: 字段类型 ('tax_number', 'phone', 'number')
+            field_type: 字段类型 ('tax_number')
             
         Returns:
             修复后的文本
@@ -590,11 +531,7 @@ class OCRService:
         
         fixed_text = text
         
-        if field_type in ['phone', 'number']:
-            # 对于纯数字字段，修复所有字母到数字的错误
-            for wrong_char, correct_char in char_fixes.items():
-                fixed_text = fixed_text.replace(wrong_char, correct_char)
-        elif field_type == 'tax_number':
+        if field_type == 'tax_number':
             # 对于税号，只修复明显的数字位置的错误
             # 统一社会信用代码：前2位是数字，第3-8位是字母数字混合，后10位是数字
             if len(fixed_text) == 18:
@@ -716,37 +653,7 @@ class OCRService:
                         logger.info(f"智能识别注册地址: {address}")
                         break
 
-        # 4. 智能识别注册电话（固定电话）- 中优先级
-        if 'reg_phone' not in result:
-            phone_patterns = [
-                # 直接标识的电话
-                r'注册电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
-                r'固定电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
-                r'座机[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
-                r'电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
-                r'办公电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
-                r'公司电话[：:\s]*(0\d{2,3}[-\s]?\d{7,8})',
-                # 标准固话格式
-                r'\b(0\d{2,3}[-\s]?\d{7,8})\b',
-                r'\b(\d{3,4}[-\s]?\d{7,8})\b',
-                r'\b(400[-\s]?\d{3}[-\s]?\d{4})\b',  # 400电话
-                r'\b(800[-\s]?\d{3}[-\s]?\d{4})\b'   # 800电话
-            ]
-            
-            for pattern in phone_patterns:
-                phone_match = re.search(pattern, text)
-                if phone_match:
-                    phone = phone_match.group(1) if '：' in pattern or ':' in pattern else phone_match.group()
-                    # 修复OCR错误
-                    phone = self._fix_ocr_errors(phone, 'phone')
-                    # 确保不是手机号
-                    clean_phone = re.sub(r'[^\d]', '', phone)
-                    if not (len(clean_phone) == 11 and clean_phone.startswith('1')):
-                        result['reg_phone'] = phone
-                        logger.info(f"智能识别注册电话: {phone}")
-                        break
-
-        # 5. 智能识别开户行 - 中优先级
+        # 4. 智能识别开户行 - 中优先级
         if 'bank_name' not in result:
             bank_patterns = [
                 # 直接标识的银行
@@ -777,46 +684,208 @@ class OCRService:
                         logger.info(f"智能识别开户行: {bank_name}")
                         break
 
+        # 5. 智能识别注册电话 - 中优先级
+        if 'reg_phone' not in result:
+            phone_patterns = [
+                # 直接标识的注册电话
+                r'注册电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*开户行|\s*银行|\s*账号|\s*联系人|\s*$)',
+                r'企业电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*开户行|\s*银行|\s*账号|\s*联系人|\s*$)',
+                r'公司电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*开户行|\s*银行|\s*账号|\s*联系人|\s*$)',
+                r'固定电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*开户行|\s*银行|\s*账号|\s*联系人|\s*$)',
+                r'座机[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*开户行|\s*银行|\s*账号|\s*联系人|\s*$)',
+                r'办公电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*开户行|\s*银行|\s*账号|\s*联系人|\s*$)',
+                # 电话号码格式匹配（区号+号码）
+                r'([0-9]{3,4}\-[0-9]{7,8})',  # 0571-88888888格式
+                r'(\([0-9]{3,4}\)[0-9]{7,8})',  # (0571)88888888格式
+                r'([0-9]{3,4}\s[0-9]{7,8})',  # 0571 88888888格式
+                # 手机号码格式（作为备选）
+                r'(1[3-9][0-9]{9})'  # 11位手机号
+            ]
+            
+            for pattern in phone_patterns:
+                phone_matches = re.findall(pattern, text)
+                for phone_number in phone_matches:
+                    # 清理电话号码
+                    phone_clean = re.sub(r'[^\d\-\(\)\s]', '', phone_number).strip()
+                    # 验证电话号码格式
+                    if self._validate_phone_number(phone_clean):
+                        result['reg_phone'] = phone_clean
+                        logger.info(f"智能识别注册电话: {phone_clean}")
+                        break
+                if 'reg_phone' in result:
+                    break
+
         # 6. 智能识别银行账号 - 中优先级
         if 'bank_account' not in result:
             account_patterns = [
-                # 直接标识的账号
-                r'账号[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
-                r'帐号[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
-                r'银行账号[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
-                r'银行账户[：:\s]*(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})',
-                r'账号[：:\s]*(\d{10,25})',
-                r'帐号[：:\s]*(\d{10,25})',
-                r'银行账号[：:\s]*(\d{10,25})',
-                r'银行账户[：:\s]*(\d{10,25})',
-                # 标准账号格式
-                r'\b(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4,9})\b',  # 4-4-4-4+格式
-                r'\b(\d{10,25})\b',                                  # 连续10-25位数字
-                r'\b(\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4})\b',       # 标准4-4-4-4格式
-                r'\b(\d{6}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4})\b'     # 6-4-4-4格式
+                # 直接标识的银行账号
+                r'银行账号[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'账号[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'银行账户[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'账户号[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'基本户账号[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'基本账户[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'对公账户[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'企业账户[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                r'公司账户[：:\s]*([0-9\s]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                # 纯数字账号匹配（10-25位）
+                r'([0-9]{10,25})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)',
+                # 带空格的账号匹配
+                r'([0-9\s]{12,30})(?=\s*联系人|\s*联系电话|\s*邮寄地址|\s*简道云|\s*$)'
             ]
             
-            account_candidates = []
             for pattern in account_patterns:
-                matches = re.findall(pattern, text)
-                for match in matches:
-                    # 清理账号（去掉空格和分隔符）
-                    clean_account = re.sub(r'[^\d]', '', match)
-                    # 修复OCR错误
-                    clean_account = self._fix_ocr_errors(clean_account, 'number')
-                    if 10 <= len(clean_account) <= 25:
-                        # 排除手机号（11位且以1开头）和税号
-                        if (not (len(clean_account) == 11 and clean_account.startswith('1')) and
-                            not (len(clean_account) in [15, 18] and clean_account.isdigit())):
-                            account_candidates.append(clean_account)
+                account_matches = re.findall(pattern, text)
+                for account_number in account_matches:
+                    # 清理账号（移除空格）
+                    account_clean = re.sub(r'\s', '', account_number).strip()
+                    # 验证账号格式
+                    if self._validate_bank_account(account_clean):
+                        result['bank_account'] = account_clean
+                        logger.info(f"智能识别银行账号: {account_clean}")
+                        break
+                if 'bank_account' in result:
+                    break
+
+        # 7. 智能识别联系人 - 低优先级
+        if 'contact_name' not in result:
+            contact_patterns = [
+                r'联系人[：:\s]*([^\n\r\d]+?)(?=\s*联系电话|\s*手机|\s*邮寄地址|\s*简道云|\s*$)',
+                r'负责人[：:\s]*([^\n\r\d]+?)(?=\s*联系电话|\s*手机|\s*邮寄地址|\s*简道云|\s*$)',
+                r'经办人[：:\s]*([^\n\r\d]+?)(?=\s*联系电话|\s*手机|\s*邮寄地址|\s*简道云|\s*$)',
+                r'联系人姓名[：:\s]*([^\n\r\d]+?)(?=\s*联系电话|\s*手机|\s*邮寄地址|\s*简道云|\s*$)'
+            ]
             
-            if account_candidates:
-                # 选择最长的作为银行账号（通常更准确）
-                best_account = max(account_candidates, key=len)
-                result['bank_account'] = best_account
-                logger.info(f"智能识别银行账号: {best_account}")
+            for pattern in contact_patterns:
+                contact_match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+                if contact_match:
+                    contact_name = contact_match.group(1).strip()
+                    if (len(contact_name) >= 2 and len(contact_name) <= 20 and 
+                        not any(word in contact_name for word in ['税号', '地址', '电话', '账号', '银行', '公司']) and
+                        not re.match(r'^\d+$', contact_name)):
+                        contact_name = re.sub(r'^[：:\s]+|[：:\s]+$', '', contact_name)
+                        result['contact_name'] = contact_name
+                        logger.info(f"智能识别联系人: {contact_name}")
+                        break
+
+        # 8. 智能识别联系电话 - 低优先级
+        if 'contact_phone' not in result:
+            contact_phone_patterns = [
+                r'联系电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*邮寄地址|\s*简道云|\s*$)',
+                r'手机[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*邮寄地址|\s*简道云|\s*$)',
+                r'手机号[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*邮寄地址|\s*简道云|\s*$)',
+                r'移动电话[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*邮寄地址|\s*简道云|\s*$)',
+                r'联系手机[：:\s]*([0-9\-\s\(\)]{7,20})(?=\s*邮寄地址|\s*简道云|\s*$)',
+                # 手机号码格式匹配
+                r'(1[3-9][0-9]{9})'  # 11位手机号
+            ]
+            
+            for pattern in contact_phone_patterns:
+                phone_matches = re.findall(pattern, text)
+                for phone_number in phone_matches:
+                    phone_clean = re.sub(r'[^\d\-\(\)\s]', '', phone_number).strip()
+                    if self._validate_phone_number(phone_clean):
+                        result['contact_phone'] = phone_clean
+                        logger.info(f"智能识别联系电话: {phone_clean}")
+                        break
+                if 'contact_phone' in result:
+                    break
+
+        # 9. 智能识别邮寄地址 - 低优先级
+        if 'mail_address' not in result:
+            mail_patterns = [
+                r'邮寄地址[：:\s]*([^\n\r]+?)(?=\s*简道云|\s*$)',
+                r'通讯地址[：:\s]*([^\n\r]+?)(?=\s*简道云|\s*$)',
+                r'收件地址[：:\s]*([^\n\r]+?)(?=\s*简道云|\s*$)',
+                r'快递地址[：:\s]*([^\n\r]+?)(?=\s*简道云|\s*$)',
+                r'寄送地址[：:\s]*([^\n\r]+?)(?=\s*简道云|\s*$)'
+            ]
+            
+            for pattern in mail_patterns:
+                mail_match = re.search(pattern, text, re.MULTILINE | re.IGNORECASE)
+                if mail_match:
+                    mail_address = mail_match.group(1).strip()
+                    if (len(mail_address) >= 8 and len(mail_address) <= 200 and 
+                        not any(word in mail_address for word in ['税号', '电话', '账号', '银行', '公司名称']) and
+                        not re.match(r'^\d+$', mail_address)):
+                        mail_address = re.sub(r'^[：:\s]+|[：:\s]+$', '', mail_address)
+                        result['mail_address'] = mail_address
+                        logger.info(f"智能识别邮寄地址: {mail_address}")
+                        break
+
+        # 10. 智能识别简道云账号 - 低优先级
+        if 'jdy_account' not in result:
+            jdy_patterns = [
+                r'简道云账号[：:\s]*([^\n\r\s]+?)(?=\s*$)',
+                r'简道云[：:\s]*([^\n\r\s]+?)(?=\s*$)',
+                r'JDY账号[：:\s]*([^\n\r\s]+?)(?=\s*$)',
+                r'jdy账号[：:\s]*([^\n\r\s]+?)(?=\s*$)',
+                # 匹配长字符串（可能是简道云账号）
+                r'([a-zA-Z0-9]{15,30})(?=\s*$)'
+            ]
+            
+            for pattern in jdy_patterns:
+                jdy_matches = re.findall(pattern, text, re.IGNORECASE)
+                for jdy_account in jdy_matches:
+                    jdy_clean = jdy_account.strip()
+                    if (len(jdy_clean) >= 10 and len(jdy_clean) <= 50 and 
+                        not jdy_clean.isdigit() and  # 不是纯数字
+                        not re.match(r'^[0-9A-Z]{15,18}$', jdy_clean)):  # 不是税号格式
+                        result['jdy_account'] = jdy_clean
+                        logger.info(f"智能识别简道云账号: {jdy_clean}")
+                        break
+                if 'jdy_account' in result:
+                    break
 
         return result
+    
+    def _validate_phone_number(self, phone: str) -> bool:
+        """
+        验证电话号码格式
+        
+        Args:
+            phone: 电话号码
+            
+        Returns:
+            是否为有效电话号码
+        """
+        if not phone:
+            return False
+        
+        # 移除所有非数字字符进行验证
+        digits_only = re.sub(r'[^\d]', '', phone)
+        
+        # 手机号码：11位，以1开头
+        if len(digits_only) == 11 and digits_only.startswith('1'):
+            return True
+        
+        # 固定电话：7-12位（包含区号）
+        if 7 <= len(digits_only) <= 12:
+            return True
+        
+        return False
+    
+    def _validate_bank_account(self, account: str) -> bool:
+        """
+        验证银行账号格式
+        
+        Args:
+            account: 银行账号
+            
+        Returns:
+            是否为有效银行账号
+        """
+        if not account:
+            return False
+        
+        # 移除所有非数字字符进行验证
+        digits_only = re.sub(r'[^\d]', '', account)
+        
+        # 银行账号：通常10-25位数字
+        if 10 <= len(digits_only) <= 25 and digits_only.isdigit():
+            return True
+        
+        return False
     
     def _validate_tax_number(self, tax_number: str) -> bool:
         """

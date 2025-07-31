@@ -298,6 +298,8 @@ function initClipboardFeature() {
 
 // 解析粘贴板文本并自动填充
 function parseClipboardText(text) {
+    console.log('开始解析粘贴板文本:', text.substring(0, 100) + '...');
+    
     // 发送到后端解析
     fetch('/parse_text', {
         method: 'POST',
@@ -308,33 +310,173 @@ function parseClipboardText(text) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('后端解析结果:', data);
+        
         if (data.success && data.fields) {
+            console.log('识别到的字段:', Object.keys(data.fields));
+            
             // 直接应用解析结果到表单
-            autoFillFields(data.fields);
+            const appliedCount = autoFillFields(data.fields);
+            
+            // 显示填充成功提示
+            showAutoFillSuccess(appliedCount, Object.keys(data.fields));
+        } else {
+            console.error('解析失败:', data.error || '未知错误');
+            showAutoFillError(data.error || '文本解析失败');
         }
     })
     .catch(error => {
         console.error('解析文本错误:', error);
+        showAutoFillError('网络请求失败，请检查网络连接');
     });
 }
 
 // 自动填充字段到表单
 function autoFillFields(fields) {
+    let appliedCount = 0;
+    const fieldMapping = {
+        'company_name': '公司名称',
+        'tax_number': '税号',
+        'reg_address': '注册地址',
+        'reg_phone': '注册电话',
+        'bank_name': '开户行',
+        'bank_account': '银行账号',
+        'jdy_account': '简道云账号'
+    };
+    
+    console.log('开始自动填充字段...');
+    
     for (const [fieldName, value] of Object.entries(fields)) {
         const input = document.getElementById(fieldName);
-        if (input && value) {
-            input.value = value;
+        const fieldLabel = fieldMapping[fieldName] || fieldName;
+        
+        if (input && value && value.trim()) {
+            const oldValue = input.value;
+            input.value = value.trim();
+            appliedCount++;
+            
+            // 添加视觉反馈
             input.classList.add('auto-filled');
+            
+            console.log(`✅ 已填充 ${fieldLabel}: ${value.trim()}`);
             
             // 移除高亮效果
             setTimeout(() => {
                 input.classList.remove('auto-filled');
-            }, 2000);
+            }, 3000);
             
             // 触发输入事件（用于公司名称搜索等）
-            input.dispatchEvent(new Event('input', { bubbles: true }));
+            if (fieldName === 'company_name' || fieldName === 'jdy_account') {
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            
+            // 触发change事件
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (!input) {
+            console.warn(`⚠️ 未找到字段 ${fieldName} 对应的输入框`);
+        } else if (!value || !value.trim()) {
+            console.warn(`⚠️ 字段 ${fieldLabel} 的值为空`);
         }
     }
+    
+    console.log(`自动填充完成，共填充 ${appliedCount} 个字段`);
+    return appliedCount;
+}
+
+// 显示自动填充成功提示
+function showAutoFillSuccess(appliedCount, fieldNames) {
+    const fieldMapping = {
+        'company_name': '公司名称',
+        'tax_number': '税号',
+        'reg_address': '注册地址',
+        'reg_phone': '注册电话',
+        'bank_name': '开户行',
+        'bank_account': '银行账号',
+        'jdy_account': '简道云账号'
+    };
+    
+    const fieldLabels = fieldNames.map(name => fieldMapping[name] || name);
+    
+    // 创建成功提示
+    const successDiv = document.createElement('div');
+    successDiv.className = 'auto-fill-success';
+    successDiv.innerHTML = `
+        <div class="success-icon">✅</div>
+        <div class="success-content">
+            <h4>自动填充成功！</h4>
+            <p>已成功填充 ${appliedCount} 个字段：</p>
+            <p class="filled-fields">${fieldLabels.join('、')}</p>
+        </div>
+        <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    // 添加样式
+    successDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 8px;
+        padding: 15px;
+        max-width: 350px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(successDiv);
+    
+    // 3秒后自动移除
+    setTimeout(() => {
+        if (successDiv.parentElement) {
+            successDiv.remove();
+        }
+    }, 5000);
+}
+
+// 显示自动填充错误提示
+function showAutoFillError(errorMessage) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'auto-fill-error';
+    errorDiv.innerHTML = `
+        <div class="error-icon">❌</div>
+        <div class="error-content">
+            <h4>自动填充失败</h4>
+            <p>${errorMessage}</p>
+        </div>
+        <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    // 添加样式
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 8px;
+        padding: 15px;
+        max-width: 350px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(errorDiv);
+    
+    // 5秒后自动移除
+    setTimeout(() => {
+        if (errorDiv.parentElement) {
+            errorDiv.remove();
+        }
+    }, 5000);
 }
 
 // 增强OCR功能

@@ -35,11 +35,9 @@
                     <h3>甲方基本信息</h3>
                     <div class="variables-form">
                         <div class="form-group full-width">
-                            <label>智能表单填充</label>
                             <div class="smart-fill-container">
                                 <!-- 左侧：OCR识别区域 -->
                                 <div class="ocr-section">
-                                    <h4>📷 OCR图片识别</h4>
                                     <div class="image-upload-container">
                                         <div class="image-upload-area" id="imageUploadArea">
                                             <div class="upload-content">
@@ -70,15 +68,14 @@
 
                                 <!-- 右侧：粘贴板自动填充区域 -->
                                 <div class="clipboard-section">
-                                    <h4>📋 粘贴板自动填充</h4>
                                     <div class="clipboard-container">
                                         <div class="clipboard-area" id="clipboardArea">
                                             <div class="clipboard-content">
                                                 <div class="clipboard-icon">📋</div>
                                                 <div class="clipboard-text">
-                                                    <p>点击此处粘贴文本内容</p>
-                                                    <p class="clipboard-hint">支持从任何地方复制的文本</p>
-                                                    <p class="clipboard-hint">粘贴后自动识别并填充表单</p>
+                                                    <p>智能粘贴识别</p>
+                                                    <p class="clipboard-hint">在页面任意位置粘贴文本</p>
+                                                    <p class="clipboard-hint">系统将自动解析并填充表单</p>
                                                 </div>
                                             </div>
                                             <textarea id="clipboardTextarea" placeholder="在此粘贴文本内容，系统将自动识别并填充相关字段..." rows="8"></textarea>
@@ -113,18 +110,6 @@
                         <div class="form-group">
                             <label for="bank_account">账号</label>
                             <input type="text" class="form-control" name="bank_account" id="bank_account">
-                        </div>
-                        <div class="form-group">
-                            <label for="contact_name">联系人</label>
-                            <input type="text" class="form-control" name="contact_name" id="contact_name">
-                        </div>
-                        <div class="form-group">
-                            <label for="contact_phone">联系电话</label>
-                            <input type="text" class="form-control" name="contact_phone" id="contact_phone">
-                        </div>
-                        <div class="form-group">
-                            <label for="mail_address">邮寄地址</label>
-                            <input type="text" class="form-control" name="mail_address" id="mail_address">
                         </div>
                         <div class="form-group">
                             <label for="jdy_account">简道云账号（必填）</label>
@@ -188,7 +173,6 @@
                     <div class="variables-form">
                         <!-- 服务期限子区域 -->
                         <div class="form-subsection">
-                            <h4 class="subsection-title">服务期限</h4>
                             <div class="subsection-fields">
                                 <div class="form-group service-duration-group">
                                     <label>服务期限（必填）</label>
@@ -241,7 +225,6 @@
 
                         <!-- 费用信息子区域 -->
                         <div class="form-subsection">
-                            <h4 class="subsection-title">费用信息</h4>
                             <div class="subsection-fields">
                                 <div class="form-group">
                                     <label for="totalAmount">服务费用金额（数字）</label>
@@ -292,9 +275,6 @@
             document.querySelector('[name="reg_phone"]').value = '0571-88888888';
             document.querySelector('[name="bank_name"]').value = '中国测试银行杭州分行';
             document.querySelector('[name="bank_account"]').value = '1234567890123456789';
-            document.querySelector('[name="contact_name"]').value = '张测试';
-            document.querySelector('[name="contact_phone"]').value = '13800138000';
-            document.querySelector('[name="mail_address"]').value = '浙江省杭州市西湖区测试路88号';
             document.querySelector('[name="jdy_account"]').value = '12345678abcdefghijklmnop';
 
             // 填充服务期限
@@ -582,7 +562,7 @@
                 }
             });
 
-            // 粘贴功能 - 改进版本
+            // 全局粘贴功能 - 智能分流处理
             document.addEventListener('paste', (e) => {
                 // 检查是否在输入框中粘贴
                 const activeElement = document.activeElement;
@@ -591,16 +571,47 @@
                 }
 
                 const items = e.clipboardData.items;
+                let hasImage = false;
+                let hasText = false;
+                
+                // 检查粘贴内容类型
                 for (let item of items) {
                     if (item.type.indexOf('image') !== -1) {
-                        e.preventDefault();
-                        const file = item.getAsFile();
-                        if (file) {
-                            handleFile(file);
-                            // 显示提示
-                            showPasteSuccess();
-                        }
+                        hasImage = true;
                         break;
+                    }
+                    if (item.type === 'text/plain') {
+                        hasText = true;
+                    }
+                }
+                
+                // 优先处理图片
+                if (hasImage) {
+                    e.preventDefault();
+                    for (let item of items) {
+                        if (item.type.indexOf('image') !== -1) {
+                            const file = item.getAsFile();
+                            if (file) {
+                                handleFile(file);
+                                showPasteSuccess('图片粘贴成功！正在进行OCR识别...');
+                            }
+                            break;
+                        }
+                    }
+                }
+                // 处理文本
+                else if (hasText) {
+                    e.preventDefault();
+                    for (let item of items) {
+                        if (item.type === 'text/plain') {
+                            item.getAsString((text) => {
+                                if (text.trim()) {
+                                    handleClipboardText(text.trim());
+                                    showClipboardSuccess('文本粘贴成功！正在智能解析...');
+                                }
+                            });
+                            break;
+                        }
                     }
                 }
             });
@@ -681,7 +692,7 @@
             resetUploadArea();
         }
 
-        function showPasteSuccess() {
+        function showPasteSuccess(message = '图片粘贴成功！') {
             // 创建临时提示
             const uploadArea = document.getElementById('imageUploadArea');
             const originalContent = uploadArea.innerHTML;
@@ -690,7 +701,7 @@
                 <div class="upload-content">
                     <div class="upload-icon">✅</div>
                     <div class="upload-text">
-                        <p>图片粘贴成功！</p>
+                        <p>${message}</p>
                         <p class="upload-hint">正在处理...</p>
                     </div>
                 </div>
@@ -700,6 +711,75 @@
             setTimeout(() => {
                 uploadArea.innerHTML = originalContent;
             }, 2000);
+        }
+
+        // 处理粘贴板文本
+        function handleClipboardText(text) {
+            console.log('处理粘贴板文本:', text);
+            
+            // 发送到后端解析
+            fetch('/parse_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.fields) {
+                    // 直接应用解析结果到表单
+                    autoFillFields(data.fields);
+                    console.log('文本解析成功，已自动填充字段:', Object.keys(data.fields));
+                } else {
+                    console.log('文本解析未找到可用字段');
+                }
+            })
+            .catch(error => {
+                console.error('解析文本错误:', error);
+            });
+        }
+
+        // 显示粘贴板成功提示
+        function showClipboardSuccess(message = '文本粘贴成功！') {
+            const clipboardArea = document.getElementById('clipboardArea');
+            const clipboardContent = clipboardArea?.querySelector('.clipboard-content');
+            
+            if (!clipboardContent) return;
+            
+            const originalContent = clipboardContent.innerHTML;
+
+            clipboardContent.innerHTML = `
+                <div class="clipboard-icon">✅</div>
+                <div class="clipboard-text">
+                    <p>${message}</p>
+                    <p class="clipboard-hint">正在智能解析...</p>
+                </div>
+            `;
+
+            // 2秒后恢复原内容
+            setTimeout(() => {
+                clipboardContent.innerHTML = originalContent;
+            }, 2000);
+        }
+
+        // 自动填充字段到表单
+        function autoFillFields(fields) {
+            for (const [fieldName, value] of Object.entries(fields)) {
+                const input = document.getElementById(fieldName);
+                if (input && value) {
+                    input.value = value;
+                    input.classList.add('auto-filled');
+                    
+                    // 移除高亮效果
+                    setTimeout(() => {
+                        input.classList.remove('auto-filled');
+                    }, 2000);
+                    
+                    // 触发输入事件（用于公司名称搜索等）
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
         }
 
         function processImage() {
