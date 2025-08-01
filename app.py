@@ -9,14 +9,23 @@ import logging
 template_handler = None
 ocr_service = None
 
-# 尝试导入OCR服务
+# 尝试导入优化的OCR服务
 try:
-    from ocr_service import OCRService
+    from ocr_service_optimized import OptimizedOCRService as OCRService
     OCR_SERVICE_AVAILABLE = True
-except ImportError as e:
     logger = logging.getLogger(__name__)
-    logger.warning(f"OCR服务导入失败: {str(e)}")
-    OCR_SERVICE_AVAILABLE = False
+    logger.info("优化OCR服务导入成功")
+except ImportError as e:
+    # 如果优化版本不可用，尝试原版本
+    try:
+        from ocr_service import OCRService
+        OCR_SERVICE_AVAILABLE = True
+        logger = logging.getLogger(__name__)
+        logger.warning("使用原版OCR服务")
+    except ImportError as e2:
+        logger = logging.getLogger(__name__)
+        logger.warning(f"OCR服务导入失败: {str(e2)}")
+        OCR_SERVICE_AVAILABLE = False
 
 # 尝试导入模板处理器
 try:
@@ -670,6 +679,7 @@ def parse_text():
             return jsonify({'success': False, 'error': '文本内容为空'}), 400
         
         logger.info(f"开始解析文本，长度: {len(text)} 字符")
+        logger.info(f"实际文本内容: {repr(text)}")  # 添加详细日志
         
         # 使用OCR服务的文本解析功能
         if ocr_service:
@@ -731,13 +741,16 @@ def ocr_image():
         
         # 使用OCR服务处理图片
         if ocr_service:
-            result = ocr_service.extract_text_from_image(image_bytes)
+            # 使用process_image方法而不是extract_text_from_image
+            result = ocr_service.process_image(image_bytes)
             if result['success']:
-                logger.info(f"OCR处理成功，提取文本长度: {len(result.get('text', ''))}")
+                logger.info(f"OCR处理成功，提取文本长度: {len(result.get('extracted_text', ''))}")
                 return jsonify({
                     'success': True,
-                    'text': result.get('text', ''),
-                    'confidence': result.get('confidence', 0)
+                    'text': result.get('extracted_text', ''),
+                    'confidence': 0.8,  # 默认置信度
+                    'fields': result.get('parsed_fields', {}),
+                    'field_count': result.get('field_count', 0)
                 })
             else:
                 logger.error(f"OCR处理失败: {result.get('error', '未知错误')}")
