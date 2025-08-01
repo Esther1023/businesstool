@@ -9,23 +9,16 @@ import logging
 template_handler = None
 ocr_service = None
 
-# 尝试导入优化的OCR服务
+# 导入优化的OCR服务
 try:
     from ocr_service_optimized import OptimizedOCRService as OCRService
     OCR_SERVICE_AVAILABLE = True
     logger = logging.getLogger(__name__)
     logger.info("优化OCR服务导入成功")
 except ImportError as e:
-    # 如果优化版本不可用，尝试原版本
-    try:
-        from ocr_service import OCRService
-        OCR_SERVICE_AVAILABLE = True
-        logger = logging.getLogger(__name__)
-        logger.warning("使用原版OCR服务")
-    except ImportError as e2:
-        logger = logging.getLogger(__name__)
-        logger.warning(f"OCR服务导入失败: {str(e2)}")
-        OCR_SERVICE_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning(f"OCR服务导入失败: {str(e)}")
+    OCR_SERVICE_AVAILABLE = False
 
 # 尝试导入模板处理器
 try:
@@ -684,11 +677,26 @@ def parse_text():
         # 使用OCR服务的文本解析功能
         if ocr_service:
             parsed_fields = ocr_service.parse_text_to_fields(text)
-            logger.info(f"文本解析成功，识别到 {len(parsed_fields)} 个字段")
+            
+            # 检测O/0混淆警告
+            warnings = []
+            if 'tax_number' in parsed_fields:
+                tax_number = parsed_fields['tax_number']
+                # 检测税号中是否包含字母O或数字0（任意一个都提醒）
+                if 'O' in tax_number or '0' in tax_number:
+                    warnings.append({
+                        'type': 'ocr_confusion',
+                        'field': 'tax_number',
+                        'message': '税号包含0/O,请注意检查🧐',
+                        'suggestion': ''
+                    })
+            
+            logger.info(f"文本解析成功，识别到 {len(parsed_fields)} 个字段，{len(warnings)} 个警告")
             return jsonify({
                 'success': True,
                 'fields': parsed_fields,
-                'field_count': len(parsed_fields)
+                'field_count': len(parsed_fields),
+                'warnings': warnings
             })
         else:
             # 如果OCR服务不可用，使用简单的文本解析
@@ -744,13 +752,28 @@ def ocr_image():
             # 使用process_image方法而不是extract_text_from_image
             result = ocr_service.process_image(image_bytes)
             if result['success']:
+                # 检测O/0混淆警告
+                warnings = []
+                parsed_fields = result.get('parsed_fields', {})
+                if 'tax_number' in parsed_fields:
+                    tax_number = parsed_fields['tax_number']
+                    # 检测税号中是否包含字母O或数字0（任意一个都提醒）
+                    if 'O' in tax_number or '0' in tax_number:
+                        warnings.append({
+                            'type': 'ocr_confusion',
+                            'field': 'tax_number',
+                            'message': '税号包含0/O,请注意检查🧐',
+                            'suggestion': ''
+                        })
+                
                 logger.info(f"OCR处理成功，提取文本长度: {len(result.get('extracted_text', ''))}")
                 return jsonify({
                     'success': True,
                     'text': result.get('extracted_text', ''),
                     'confidence': 0.8,  # 默认置信度
                     'fields': result.get('parsed_fields', {}),
-                    'field_count': result.get('field_count', 0)
+                    'field_count': result.get('field_count', 0),
+                    'warnings': warnings
                 })
             else:
                 logger.error(f"OCR处理失败: {result.get('error', '未知错误')}")

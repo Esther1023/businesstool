@@ -628,8 +628,6 @@
         }
 
         function handleFile(file) {
-            console.log('处理文件:', file.name, file.type, file.size);
-
             // 检查文件是否存在
             if (!file) {
                 alert('未选择文件');
@@ -649,7 +647,6 @@
                 return;
             }
 
-            console.log('文件验证通过，开始处理');
             currentImageFile = file;
             showImagePreview(file);
 
@@ -660,14 +657,12 @@
         }
 
         function showImagePreview(file) {
-            console.log('显示图片预览');
             const uploadArea = document.getElementById('imageUploadArea');
             const imagePreview = document.getElementById('imagePreview');
             const previewImage = document.getElementById('previewImage');
 
             const reader = new FileReader();
             reader.onload = (e) => {
-                console.log('图片读取完成');
                 previewImage.src = e.target.result;
                 uploadArea.style.display = 'none';
                 imagePreview.style.display = 'block';
@@ -680,7 +675,6 @@
         }
 
         function clearImage() {
-            console.log('清除图片');
             currentImageFile = null;
             recognizedFields = {};
 
@@ -715,8 +709,6 @@
 
         // 处理粘贴板文本
         function handleClipboardText(text) {
-            console.log('处理粘贴板文本:', text);
-            
             // 发送到后端解析
             fetch('/parse_text', {
                 method: 'POST',
@@ -730,9 +722,6 @@
                 if (data.success && data.fields) {
                     // 直接应用解析结果到表单
                     autoFillFields(data.fields);
-                    console.log('文本解析成功，已自动填充字段:', Object.keys(data.fields));
-                } else {
-                    console.log('文本解析未找到可用字段');
                 }
             })
             .catch(error => {
@@ -783,8 +772,6 @@
         }
 
         function processImage() {
-            console.log('开始处理图片');
-
             if (!currentImageFile) {
                 alert('请先选择图片');
                 return;
@@ -801,27 +788,22 @@
             const formData = new FormData();
             formData.append('image', currentImageFile);
 
-            console.log('发送OCR请求，文件大小:', currentImageFile.size);
-
             // 发送OCR请求
             fetch('/ocr_process', {
                 method: 'POST',
                 body: formData
             })
             .then(response => {
-                console.log('收到响应:', response.status);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 return response.json();
             })
             .then(data => {
-                console.log('OCR响应数据:', data);
                 ocrProgress.style.display = 'none';
 
                 if (data.success) {
                     recognizedFields = data.parsed_fields;
-                    console.log('识别到字段:', Object.keys(data.parsed_fields).length);
                     // 显示简化的成功提示并直接填充
                     showOCRSuccess(data);
                 } else {
@@ -855,26 +837,11 @@
             // 应用字段到表单
             const result = applyFieldsToFormDirectly(data.parsed_fields);
 
-            // 显示成功消息
-            uploadArea.innerHTML = `
-                <div class="upload-content">
-                    <div class="upload-icon">✅</div>
-                    <div class="upload-text">
-                        <p><strong>识别成功！</strong></p>
-                        <p>已自动填充 ${result.appliedCount} 个字段到表单</p>
-                        <p class="upload-hint">您可以直接在表单中编辑这些字段</p>
-                    </div>
-                </div>
-            `;
-            uploadArea.style.display = 'block';
-
             // 隐藏OCR结果区域（不再需要）
             ocrResult.style.display = 'none';
 
-            // 3秒后恢复上传区域
-            setTimeout(() => {
-                resetUploadArea();
-            }, 3000);
+            // 直接恢复上传区域，不显示成功提示
+            resetUploadArea();
         }
 
         function resetUploadArea() {
@@ -1057,9 +1024,8 @@
             }
         }
 
-        // 初始化所有事件监听器
+        // 初始化智能表单填充功能
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('初始化智能表单填充功能');
             initImageUpload();
         });
 
@@ -1179,7 +1145,6 @@
 
         async function queryCustomer(jdyAccount) {
             try {
-                console.log('查询简道云账号:', jdyAccount); // 调试输出
                 const response = await fetch('/query_customer', {
                     method: 'POST',
                     headers: {
@@ -1188,16 +1153,13 @@
                     body: JSON.stringify({ jdy_id: jdyAccount })
                 });
 
-                console.log('响应状态:', response.status); // 调试输出
-
                 if (!response.ok) {
                     const error = await response.json();
-                    console.error('查询错误:', error); // 调试输出
+                    console.error('查询错误:', error);
                     throw new Error(error.error || '查询失败');
                 }
 
                 const data = await response.json();
-                console.log('查询结果:', data); // 调试输出
 
                 if (!data.results || data.results.length === 0) {
                     throw new Error('未找到客户信息');
@@ -1244,7 +1206,6 @@
 
         async function queryByCompanyName(companyName) {
             try {
-                console.log('查询公司名称:', companyName); // 调试输出
                 const response = await fetch('/query_customer', {
                     method: 'POST',
                     headers: {
@@ -1253,16 +1214,13 @@
                     body: JSON.stringify({ company_name: companyName })
                 });
 
-                console.log('响应状态:', response.status); // 调试输出
-
                 if (!response.ok) {
                     const error = await response.json();
-                    console.error('查询错误:', error); // 调试输出
+                    console.error('查询错误:', error);
                     throw new Error(error.error || '查询失败');
                 }
 
                 const data = await response.json();
-                console.log('查询结果:', data); // 调试输出
 
                 if (!data.results || data.results.length === 0) {
                     throw new Error('未找到客户信息');

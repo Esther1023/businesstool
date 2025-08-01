@@ -35,7 +35,6 @@ class TemplateHandler:
         try:
             self.doc = DocxTemplate(template_path)
         except Exception as e:
-            print(f"模板加载错误: {str(e)}")
             # 尝试复制文件到临时目录再加载
             temp_path = os.path.join(tempfile.gettempdir(), os.path.basename(template_path))
             with open(template_path, 'rb') as src, open(temp_path, 'wb') as dst:

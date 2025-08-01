@@ -298,7 +298,7 @@ function initClipboardFeature() {
 
 // 解析粘贴板文本并自动填充
 function parseClipboardText(text) {
-    console.log('开始解析粘贴板文本:', text.substring(0, 100) + '...');
+    
     
     // 发送到后端解析
     fetch('/parse_text', {
@@ -310,16 +310,15 @@ function parseClipboardText(text) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log('后端解析结果:', data);
-        
         if (data.success && data.fields) {
-            console.log('识别到的字段:', Object.keys(data.fields));
             
             // 直接应用解析结果到表单
             const appliedCount = autoFillFields(data.fields);
             
-            // 显示填充成功提示
-            showAutoFillSuccess(appliedCount, Object.keys(data.fields));
+            // 处理警告信息
+            if (data.warnings && data.warnings.length > 0) {
+                showOCRWarnings(data.warnings);
+            }
         } else {
             console.error('解析失败:', data.error || '未知错误');
             showAutoFillError(data.error || '文本解析失败');
@@ -344,7 +343,7 @@ function autoFillFields(fields) {
         'jdy_account': '简道云账号'
     };
     
-    console.log('开始自动填充字段...');
+
     
     for (const [fieldName, value] of Object.entries(fields)) {
         const input = document.getElementById(fieldName);
@@ -358,7 +357,7 @@ function autoFillFields(fields) {
             // 添加视觉反馈
             input.classList.add('auto-filled');
             
-            console.log(`✅ 已填充 ${fieldLabel}: ${value.trim()}`);
+            
             
             // 移除高亮效果
             setTimeout(() => {
@@ -379,63 +378,137 @@ function autoFillFields(fields) {
         }
     }
     
-    console.log(`自动填充完成，共填充 ${appliedCount} 个字段`);
+
     return appliedCount;
 }
 
-// 显示自动填充成功提示
-function showAutoFillSuccess(appliedCount, fieldNames) {
-    const fieldMapping = {
-        'company_name': '公司名称',
-        'tax_number': '税号',
-        'reg_address': '注册地址',
-        'reg_phone': '注册电话',
-        'bank_name': '开户行',
-        'bank_account': '银行账号',
-        'jdy_account': '简道云账号'
-    };
+// 自动填充成功提示已移除，直接进行字段填充
+
+// 显示OCR警告信息
+function showOCRWarnings(warnings) {
+    warnings.forEach((warning, index) => {
+        const warningDiv = document.createElement('div');
+        warningDiv.className = 'ocr-warning';
+        
+        // 简化的警告内容，去掉标题，只显示核心提醒
+        warningDiv.innerHTML = `
+            <div class="warning-icon">🧐</div>
+            <div class="warning-content">
+                <span class="warning-text">税号包含0/O,请注意检查</span>
+            </div>
+            <button class="close-btn" onclick="this.parentElement.remove()">×</button>
+        `;
+        
+        // 优化样式 - 更小巧美观
+        warningDiv.style.cssText = `
+            position: fixed;
+            top: ${20 + index * 60}px;
+            right: 20px;
+            background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+            border: 1px solid #ffd93d;
+            border-radius: 12px;
+            padding: 12px 16px;
+            max-width: 280px;
+            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.2);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideInRight 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #ffc107;
+        `;
+        
+        // 添加优化的样式
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from {
+                    transform: translateX(100%);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateX(0);
+                    opacity: 1;
+                }
+            }
+            
+            .ocr-warning .warning-icon {
+                font-size: 18px;
+                flex-shrink: 0;
+            }
+            
+            .ocr-warning .warning-content {
+                flex: 1;
+            }
+            
+            .ocr-warning .warning-text {
+                font-size: 14px;
+                color: #856404;
+                font-weight: 500;
+                line-height: 1.3;
+            }
+            
+            .ocr-warning .close-btn {
+                background: none;
+                border: none;
+                font-size: 16px;
+                cursor: pointer;
+                color: #856404;
+                padding: 4px;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            }
+            
+            .ocr-warning .close-btn:hover {
+                background: rgba(133, 100, 4, 0.15);
+                transform: scale(1.1);
+            }
+            
+            .ocr-warning:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(255, 193, 7, 0.3);
+                transition: all 0.3s ease;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(warningDiv);
+        
+        // 8秒后自动移除
+        setTimeout(() => {
+            if (warningDiv.parentElement) {
+                warningDiv.style.animation = 'slideOutRight 0.3s ease-in forwards';
+                setTimeout(() => {
+                    if (warningDiv.parentElement) {
+                        warningDiv.remove();
+                    }
+                }, 300);
+            }
+        }, 8000);
+    });
     
-    const fieldLabels = fieldNames.map(name => fieldMapping[name] || name);
-    
-    // 创建成功提示
-    const successDiv = document.createElement('div');
-    successDiv.className = 'auto-fill-success';
-    successDiv.innerHTML = `
-        <div class="success-icon">✅</div>
-        <div class="success-content">
-            <h4>自动填充成功！</h4>
-            <p>已成功填充 ${appliedCount} 个字段：</p>
-            <p class="filled-fields">${fieldLabels.join('、')}</p>
-        </div>
-        <button class="close-btn" onclick="this.parentElement.remove()">×</button>
-    `;
-    
-    // 添加样式
-    successDiv.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #d4edda;
-        border: 1px solid #c3e6cb;
-        border-radius: 8px;
-        padding: 15px;
-        max-width: 350px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-        animation: slideInRight 0.3s ease-out;
-    `;
-    
-    document.body.appendChild(successDiv);
-    
-    // 3秒后自动移除
-    setTimeout(() => {
-        if (successDiv.parentElement) {
-            successDiv.remove();
+    // 添加退出动画
+    const exitStyle = document.createElement('style');
+    exitStyle.textContent = `
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
         }
-    }, 5000);
+    `;
+    document.head.appendChild(exitStyle);
 }
 
 // 显示自动填充错误提示
@@ -609,9 +682,23 @@ function processImageForOCR(imageSrc) {
     .then(data => {
         ocrProgress.style.display = 'none';
         
-        if (data.success && data.text) {
-            // 直接解析OCR结果并自动填充
-            parseClipboardText(data.text);
+        if (data.success) {
+            // 如果有字段信息，直接填充
+            if (data.fields && Object.keys(data.fields).length > 0) {
+                // 直接应用解析结果到表单
+                const appliedCount = autoFillFields(data.fields);
+                
+                // 处理警告信息
+                if (data.warnings && data.warnings.length > 0) {
+                    showOCRWarnings(data.warnings);
+                }
+            } else if (data.text) {
+                // 如果没有字段信息但有文本，使用文本解析
+                parseClipboardText(data.text);
+            }
+        } else {
+            console.error('OCR识别失败:', data.error);
+            showAutoFillError(data.error || 'OCR识别失败');
         }
     })
     .catch(error => {
