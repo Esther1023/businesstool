@@ -70,17 +70,12 @@ except Exception as e:
     logger.warning(f"OCR服务初始化失败: {str(e)}")
     ocr_service = None
 
-# 初始化模板处理器（容错处理）
-try:
-    if TEMPLATE_HANDLER_AVAILABLE:
-        template_handler = TemplateHandler()
-        logger.info("模板处理器初始化成功")
-    else:
-        logger.warning("模板处理器不可用：导入失败")
-        template_handler = None
-except Exception as e:
-    logger.warning(f"模板处理器初始化失败: {str(e)}")
-    template_handler = None
+# 模板处理器将在需要时初始化
+template_handler = None
+if TEMPLATE_HANDLER_AVAILABLE:
+    logger.info("模板处理器类可用")
+else:
+    logger.warning("模板处理器不可用：导入失败")
 
 # 存储最后导入时间
 last_import_time = None
@@ -97,7 +92,8 @@ def health_check():
             'environment': os.environ.get('FLASK_ENV', 'development'),
             'services': {
                 'flask': 'available',
-                'template_handler': 'available'
+                'template_handler': 'available' if TEMPLATE_HANDLER_AVAILABLE else 'unavailable',
+                'ocr_service': 'available' if ocr_service else 'unavailable'
             }
         }), 200
     except Exception as e:
