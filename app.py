@@ -77,8 +77,7 @@ if TEMPLATE_HANDLER_AVAILABLE:
 else:
     logger.warning("模板处理器不可用：导入失败")
 
-# 存储最后导入时间
-last_import_time = None
+# 移除了全局的last_import_time变量，现在每条数据都有自己的上传日期
 
 # 健康检查端点
 @app.route('/health')
@@ -161,7 +160,7 @@ def load_customer_data():
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html', last_import_time=last_import_time)
+    return render_template('index.html')
 
 @app.route('/test', methods=['GET'])
 def test():
@@ -169,7 +168,6 @@ def test():
 @app.route('/upload_excel', methods=['POST'])
 @login_required
 def upload_excel():
-    global last_import_time
     try:
         if 'file' not in request.files:
             return jsonify({'error': '没有上传文件'}), 400
@@ -181,24 +179,27 @@ def upload_excel():
         if not file.filename.endswith('.xlsx'):
             return jsonify({'error': '请上传Excel文件(.xlsx)'}), 400
 
-        # 保存文件
-        file.save('六大战区简道云客户.xlsx')
+        # 读取上传的Excel文件
+        df = pd.read_excel(file)
         
-        # 更新导入时间
-        last_import_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # 添加上传日期列
+        upload_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        df['上传日期'] = upload_date
+        
+        # 保存带有上传日期的文件
+        df.to_excel('六大战区简道云客户.xlsx', index=False)
         
         return jsonify({
-            'message': '文件上传成功',
-            'last_import_time': last_import_time
+            'message': f'文件上传成功，共导入{len(df)}条数据',
+            'upload_date': upload_date,
+            'record_count': len(df)
         })
         
     except Exception as e:
         logger.error(f"文件上传失败: {str(e)}")
         return jsonify({'error': f'文件上传失败: {str(e)}'}), 500
 
-@app.route('/get_last_import_time')
-def get_last_import_time():
-    return jsonify({'last_import_time': last_import_time})
+# 移除了get_last_import_time路由，因为现在每条数据都有自己的上传日期
 
 @app.route('/get_future_expiring_customers')
 @login_required
@@ -349,13 +350,20 @@ def get_expiring_customers():
             reminder_type = f"节假日期间到期提醒（{holiday_period[0].strftime('%m月%d日')}至{holiday_period[-1].strftime('%m月%d日')}）"
             logger.info(f"节假日前一天，提醒节假日期间到期的客户: {target_dates}")
         elif weekday == 4:  # 周五
-            # 周五：提醒周六和周日到期的客户
+            # 周五：提醒周六、周日和下周一到期的客户
             saturday = today + pd.Timedelta(days=1)
             sunday = today + pd.Timedelta(days=2)
-            target_dates = [saturday, sunday]
-            reminder_type = "周末到期提醒"
-            logger.info("周五，提醒周末到期的客户")
-        elif weekday < 4:  # 周一到周四
+            monday = today + pd.Timedelta(days=3)
+            target_dates = [saturday, sunday, monday]
+            reminder_type = "周末及下周一到期提醒"
+            logger.info("周五，提醒周末和下周一到期的客户")
+        elif weekday == 0:  # 周一
+            # 周一：提醒明天（周二）到期的客户
+            tomorrow = today + pd.Timedelta(days=1)
+            target_dates = [tomorrow]
+            reminder_type = "明天到期提醒"
+            logger.info("周一，提醒明天到期的客户")
+        elif weekday < 4:  # 周二到周四
             # 平时：提醒明天到期的客户
             tomorrow = today + pd.Timedelta(days=1)
             target_dates = [tomorrow]
@@ -559,6 +567,26 @@ def query_customer():
         logger.error(f"查询出错: {str(e)}")
         return jsonify({'error': f'查询出错: {str(e)}'}), 500
 
+@app.route('/download_template')
+def download_template():
+    try:
+        # 模版文件路径
+        template_path = os.path.join(os.getcwd(), '六大战区简道云客户-模版.xlsx')
+        if not os.path.exists(template_path):
+            logger.error(f"模版文件不存在: {template_path}")
+            return '模版文件不存在', 404
+
+        logger.info(f"正在下载模版文件: {template_path}")
+        return send_file(
+            template_path,
+            as_attachment=True,
+            download_name='六大战区简道云客户-模版.xlsx',
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        logger.error(f"模版文件下载错误: {str(e)}")
+        return '模版文件下载错误', 500
+
 @app.route('/docx_templates/<template_name>')
 def get_template(template_name):
     if not template_name.endswith('.docx'):
@@ -619,7 +647,18 @@ def generate():
         if contract_types:
             form_data['contract_types'] = ', '.join(contract_types)
         
+        # 计算小数年份并替换service_years
+        service_years = int(form_data.get('service_years', 0) or 0)
+        service_months = int(form_data.get('service_months', 0) or 0)
+        total_years = service_years + (service_months / 12)
+        # 格式化为合适的小数位数，去掉不必要的零
+        if total_years % 1 == 0:
+            form_data['service_years'] = f"{total_years:.0f}"
+        else:
+            form_data['service_years'] = f"{total_years:.2f}".rstrip('0').rstrip('.')
+        
         logger.info(f"接收到的表单数据: {form_data}")
+        logger.info(f"计算的小数年份: {total_years:.1f}年")
         
         # 创建临时文件用于保存生成的合同
         temp_output = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)

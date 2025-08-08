@@ -117,15 +117,18 @@
                                 <input type="text" class="form-control" name="jdy_account" id="jdy_account" required
                                     oninput="debounceQueryCustomer(event)" placeholder="输入ID显示全部信息">
                                 <input type="file" id="excelUpload" accept=".xlsx" style="display: none;">
-                                <button type="button" class="btn btn-excel"
-                                    onclick="document.getElementById('excelUpload').click()">导入Excel</button>
+                                <div class="excel-buttons">
+                                    <button type="button" class="btn btn-excel btn-template-download"
+                                        onclick="downloadTemplate()">下载模版</button>
+                                    <button type="button" class="btn btn-excel btn-excel-upload"
+                                        onclick="document.getElementById('excelUpload').click()">导入表格</button>
+                                </div>
                                 <button type="button" class="btn btn-shortcut" id="btn-hetiao-inline">业绩进度</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-sa-inline">SA后台</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-huikuan-inline">查查回款</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-xiadan-inline">记得接口</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-qiwei-inline">KMS</button>
                                 <button type="button" class="btn btn-shortcut" id="btn-daike-inline">客户归属</button>
-                                <span id="lastImportTime" class="last-import-time"></span>
                             </div>
                         </div>
                         <div id="customerInfo" class="form-group full-width" style="display: none;">
@@ -229,20 +232,19 @@
                                 <div class="form-group">
                                     <label for="totalAmount">服务费用金额（数字）</label>
                                     <input type="number" class="form-control" name="total_amount" required id="totalAmount"
-                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?"
-                                        oninput="calculateUnitPrice()">
+                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?">
                                 </div>
                                 <div class="form-group">
                                     <label for="user_count">使用人数</label>
                                     <input type="number" class="form-control" name="user_count" id="user_count" required min="1"
-                                        step="1" pattern="[0-9]+" oninput="calculateUnitPrice()">
+                                        step="1" pattern="[0-9]+">
                                 </div>
                                 <div class="form-group">
                                     <label for="unitPrice">单价（元/人/年）</label>
                                     <input type="number" class="form-control" name="unit_price" required id="unitPrice"
-                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?"
-                                        oninput="calculateTotalAmount()">
+                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?">
                                 </div>
+
                                 <div class="form-group full-width">
                                     <label for="totalAmountCn">服务费用金额（大写，自动生成）</label>
                                     <div class="input-group">
@@ -290,7 +292,8 @@
             // 填充费用信息
             document.getElementById('totalAmount').value = '125680.50';
             document.querySelector('[name="user_count"]').value = '50';
-            // 触发自动计算单价
+            document.getElementById('unitPrice').value = '168';
+            // 触发自动计算
             calculateUnitPrice();
 
 
@@ -370,7 +373,7 @@
         function calculateUnitPrice() {
             const totalAmount = parseFloat(document.getElementById('totalAmount').value) || 0;
             const userCount = parseFloat(document.querySelector('[name="user_count"]').value) || 0;
-            const serviceYears = getTotalServiceYears();
+            const serviceYears = parseInt(document.getElementById('serviceYears').value) || 1; // 只使用年份字段，如果为0默认按1年计算
 
             if (totalAmount && userCount && serviceYears > 0) {
                 const unitPrice = totalAmount / (userCount * serviceYears);
@@ -379,12 +382,12 @@
                 updateChineseAmount(totalAmount);
             }
         }
-
+        
         // 根据单价计算总金额
         function calculateTotalAmount() {
             const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
             const userCount = parseFloat(document.querySelector('[name="user_count"]').value) || 0;
-            const serviceYears = getTotalServiceYears();
+            const serviceYears = parseInt(document.getElementById('serviceYears').value) || 1; // 只使用年份字段，如果为0默认按1年计算
 
             if (unitPrice && userCount && serviceYears > 0) {
                 const totalAmount = unitPrice * userCount * serviceYears;
@@ -418,8 +421,12 @@
                 monthsInput.value = months;
             }
 
-            // 更新总计显示
-            summaryDiv.textContent = `总计：${years}年${months}个月`;
+            // 计算小数年份
+            const totalYears = years + (months / 12);
+            
+            // 更新总计显示为小数格式，去掉不必要的零
+            const displayYears = totalYears % 1 === 0 ? totalYears.toFixed(0) : totalYears.toFixed(2).replace(/\.?0+$/, '');
+            summaryDiv.textContent = `总计：${displayYears}年`;
 
             // 计算结束日期
             calculateEndDate();
@@ -1085,14 +1092,7 @@
 
 
 
-        // 检查并显示最后导入时间
-        fetch('/get_last_import_time')
-            .then(response => response.json())
-            .then(data => {
-                if (data.last_import_time) {
-                    document.getElementById('lastImportTime').textContent = `最后导入: ${data.last_import_time}`;
-                }
-            });
+        // 移除了最近导入时间的显示逻辑，现在每条数据都有自己的上传日期
 
         // Excel文件上传处理
         document.getElementById('excelUpload').addEventListener('change', function (e) {
@@ -1111,8 +1111,7 @@
                     if (data.error) {
                         alert(data.error);
                     } else {
-                        document.getElementById('lastImportTime').textContent = `最后导入: ${data.last_import_time}`;
-                        alert('Excel文件导入成功');
+                        alert(`Excel文件导入成功！\n共导入${data.record_count}条数据\n上传时间: ${data.upload_date}`);
                     }
                 })
                 .catch(error => {
@@ -1335,6 +1334,16 @@
                 alert('生成合同失败: ' + error.message);
             });
         });
+
+        // 下载模版函数
+        function downloadTemplate() {
+            const link = document.createElement('a');
+            link.href = '/download_template';
+            link.download = '六大战区简道云客户-模版.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
         // 初始化
         initEventListeners();

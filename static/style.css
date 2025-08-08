@@ -461,13 +461,31 @@ textarea.form-control {
     display: none;
 }
 
+.excel-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-left: 10px;
+}
+
 .btn-excel {
     background-color: var(--primary-color);
-    margin-left: 10px;
+    margin: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    min-width: 80px;
 }
 
 .btn-excel:hover {
     background-color: var(--primary-hover);
+}
+
+.btn-template-download {
+    background-color: var(--secondary-color);
+}
+
+.btn-template-download:hover {
+    background-color: var(--secondary-hover);
 }
 
 .button-group {
