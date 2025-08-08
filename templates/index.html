@@ -313,47 +313,88 @@
             const bigUnits = ['', '万', '亿'];
 
             num = Math.floor(num);
-            let strArr = [];
-            let current = num;
-            let level = 0;
+            let result = '';
+            let needZero = false;
 
-            while (current > 0) {
-                let section = current % 10000;
-                let sectionStr = '';
-                let hasValue = false;
-                let lastHasValue = false;
-
-                for (let i = 0; i < 4; i++) {
-                    const digit = section % 10;
-
-                    if (digit === 0) {
-                        if (lastHasValue && section > 0) {
-                            sectionStr = '零' + sectionStr;
-                        }
-                        lastHasValue = false;
-                    } else {
-                        sectionStr = chineseNums[digit] + units[i] + sectionStr;
-                        hasValue = true;
-                        lastHasValue = true;
-                    }
-
-                    section = Math.floor(section / 10);
-                }
-
-                if (hasValue) {
-                    sectionStr = sectionStr + bigUnits[level] + (strArr.length > 0 ? '零' : '');
-                }
-
-                if (sectionStr) {
-                    strArr.unshift(sectionStr.replace(/零+$/, '').replace(/零+/g, '零'));
-                }
-
-                current = Math.floor(current / 10000);
-                level++;
+            // 处理亿位
+            if (num >= 100000000) {
+                const yi = Math.floor(num / 100000000);
+                result += convertSection(yi, chineseNums, units) + '亿';
+                num %= 100000000;
+                needZero = true;
             }
 
-            let result = strArr.join('').replace(/零+$/, '');
+            // 处理万位
+            if (num >= 10000) {
+                const wan = Math.floor(num / 10000);
+                if (needZero && wan < 1000) {
+                    result += '零';
+                }
+                result += convertSection(wan, chineseNums, units) + '万';
+                num %= 10000;
+                needZero = true;
+            }
+
+            // 处理个位
+            if (num > 0) {
+                if (needZero && num < 1000) {
+                    result += '零';
+                }
+                result += convertSection(num, chineseNums, units);
+            }
+
             return result + '元整';
+        }
+
+        // 转换四位数以内的数字
+        function convertSection(num, chineseNums, units) {
+            if (num === 0) return '';
+            
+            let result = '';
+            let needZero = false;
+            
+            // 千位
+            const qian = Math.floor(num / 1000);
+            if (qian > 0) {
+                result += chineseNums[qian] + '仟';
+                needZero = true;
+            }
+            num %= 1000;
+            
+            // 百位
+            const bai = Math.floor(num / 100);
+            if (bai > 0) {
+                if (needZero && bai < 10) {
+                    // 这里不需要加零，因为百位直接跟在千位后面
+                }
+                result += chineseNums[bai] + '佰';
+                needZero = true;
+            } else if (needZero && num > 0) {
+                result += '零';
+                needZero = false;
+            }
+            num %= 100;
+            
+            // 十位
+            const shi = Math.floor(num / 10);
+            if (shi > 0) {
+                if (needZero && shi < 10) {
+                    // 这里不需要加零，因为十位直接跟在百位后面
+                }
+                result += chineseNums[shi] + '拾';
+                needZero = true;
+            } else if (needZero && num > 0) {
+                result += '零';
+                needZero = false;
+            }
+            num %= 10;
+            
+            // 个位
+            if (num > 0) {
+                result += chineseNums[num];
+            }
+            
+            return result;
         }
 
         // 更新中文金额
