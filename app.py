@@ -1,0 +1,1742 @@
+from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, session
+import os
+import tempfile
+import pandas as pd
+from datetime import datetime
+import logging
+import threading
+import time
+from pathlib import Path
+import re
+
+# 延迟导入OCR相关模块，避免启动时失败
+template_handler = None
+ocr_service = None
+
+# 导入状态管理器
+try:
+    from stage_manager import StageManager
+    STAGE_MANAGER_AVAILABLE = True
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"状态管理器导入失败: {str(e)}")
+    STAGE_MANAGER_AVAILABLE = False
+
+# 导入优化的OCR服务
+try:
+    from ocr_service_optimized import OptimizedOCRService as OCRService
+    OCR_SERVICE_AVAILABLE = True
+    logger = logging.getLogger(__name__)
+    logger.info("优化OCR服务导入成功")
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"OCR服务导入失败: {str(e)}")
+    OCR_SERVICE_AVAILABLE = False
+
+# 尝试导入模板处理器
+try:
+    from template_handler import TemplateHandler
+    TEMPLATE_HANDLER_AVAILABLE = True
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"模板处理器导入失败: {str(e)}")
+    TEMPLATE_HANDLER_AVAILABLE = False
+
+# 创建Flask应用
+app = Flask(__name__)
+
+# 简化配置
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+
+# 设置日志记录
+log_dir = 'logs'
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir, exist_ok=True)
+
+# 生产环境使用不同的日志配置
+env = os.environ.get('FLASK_ENV', 'development')
+if env == 'production':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s: %(message)s'
+    )
+else:
+    log_file = os.path.join(log_dir, 'app.log')
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)s: %(message)s'
+    )
+
+logger = logging.getLogger(__name__)
+
+# 初始化OCR服务（容错处理）
+try:
+    if OCR_SERVICE_AVAILABLE:
+        ocr_service = OCRService()
+        logger.info("OCR服务初始化成功")
+    else:
+        logger.warning("OCR服务不可用：导入失败")
+        ocr_service = None
+except Exception as e:
+    logger.warning(f"OCR服务初始化失败: {str(e)}")
+    ocr_service = None
+
+# 模板处理器将在需要时初始化
+template_handler = None
+if TEMPLATE_HANDLER_AVAILABLE:
+    logger.info("模板处理器类可用")
+else:
+    logger.warning("模板处理器不可用：导入失败")
+
+# 存储最后导入时间
+last_import_time = None
+
+# 初始化状态管理器
+stage_manager = None
+if STAGE_MANAGER_AVAILABLE:
+    try:
+        stage_manager = StageManager('六大战区简道云客户.xlsx')
+        logger.info("状态管理器初始化成功")
+    except Exception as e:
+        logger.warning(f"状态管理器初始化失败: {str(e)}")
+        stage_manager = None
+
+# 自动监控相关变量
+auto_monitor_enabled = False
+monitor_thread = None
+monitor_lock = threading.Lock()
+last_monitor_check = None
+monitor_results = {'recent_contracts': [], 'updated_contracts': [], 'last_check': None}
+# 已处理文件记录（文件路径 -> 处理时间戳）
+processed_files = {}
+
+# 健康检查端点
+@app.route('/health')
+def health_check():
+    """健康检查端点，用于监控服务状态"""
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'version': '1.0.0',
+            'environment': os.environ.get('FLASK_ENV', 'development'),
+            'services': {
+                'flask': 'available',
+                'template_handler': 'available' if TEMPLATE_HANDLER_AVAILABLE else 'unavailable',
+                'ocr_service': 'available' if ocr_service else 'unavailable'
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
+# 添加安全头
+@app.after_request
+def add_security_headers(response):
+    if app.config.get('DEBUG'):
+        # 开发环境使用宽松的CSP
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+    else:
+        # 生产环境使用更严格的安全头
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
+# 登录页面
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if (username == 'Esther' and password == '967420') or (username == 'Mia' and password == '123456'):  # 简单的用户名密码验证
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        return render_template('login.html', error='用户名或密码错误')
+    return render_template('login.html')
+
+# 登出功能
+@app.route('/logout')
+def logout():
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
+
+# 登录保护装饰器
+def login_required(func):
+    def wrapper(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('login'))
+        return func(*args, **kwargs)
+    wrapper.__name__ = func.__name__
+    return wrapper
+
+# 加载Excel数据
+def load_customer_data():
+    global last_import_time
+    excel_path = '六大战区简道云客户.xlsx'
+    try:
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return None
+        df = pd.read_excel(excel_path)
+        return df
+    except Exception as e:
+        logger.error(f"Excel加载错误: {str(e)}")
+        return None
+
+@app.route('/')
+@login_required
+def index():
+    return render_template('index.html', last_import_time=last_import_time)
+
+@app.route('/test', methods=['GET'])
+def test():
+    return 'Hello, World!'
+@app.route('/upload_excel', methods=['POST'])
+@login_required
+def upload_excel():
+    global last_import_time
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': '没有上传文件'}), 400
+            
+        file = request.files['file']
+        if not file or not file.filename:
+            return jsonify({'error': '没有选择文件'}), 400
+            
+        if not file.filename.endswith('.xlsx'):
+            return jsonify({'error': '请上传Excel文件(.xlsx)'}), 400
+
+        # 保存文件
+        file.save('六大战区简道云客户.xlsx')
+        
+        # 更新导入时间
+        last_import_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        return jsonify({
+            'message': '文件上传成功',
+            'last_import_time': last_import_time
+        })
+        
+    except Exception as e:
+        logger.error(f"文件上传失败: {str(e)}")
+        return jsonify({'error': f'文件上传失败: {str(e)}'}), 500
+
+@app.route('/get_last_import_time')
+def get_last_import_time():
+    return jsonify({'last_import_time': last_import_time})
+
+@app.route('/get_future_expiring_customers')
+@login_required
+def get_future_expiring_customers():
+    try:
+        # 检查文件是否存在
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件: {excel_path}")
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'error': '数据文件不存在'}), 500
+
+        try:
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'error': '数据文件读取失败'}), 500
+
+        if '到期日期' not in df.columns or '用户ID' not in df.columns or '账号-企业名称' not in df.columns or '续费责任销售' not in df.columns:
+            logger.error("Excel文件中缺少必要列")
+            return jsonify({'error': '数据格式错误：缺少必要列'}), 500
+        
+        # 获取当前日期
+        now = datetime.now()
+        
+        # 计算23天后和30天后的日期
+        days_23_later = now + pd.Timedelta(days=23)
+        days_30_later = now + pd.Timedelta(days=30)
+        
+        # 筛选出23-30天内将要过期的客户
+        esther_customers = []
+        other_customers = []
+        
+        for _, row in df.iterrows():
+            if pd.notna(row['到期日期']):
+                try:
+                    expiry_date = pd.to_datetime(row['到期日期'])
+                    # 如果过期时间在23天后和30天后之间
+                    if days_23_later <= expiry_date <= days_30_later:
+                        # 处理责任销售字段 - 优先使用续费责任销售，如果为空则使用责任销售中英文
+                        sales_raw = row.get('续费责任销售', '')
+                        if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                            sales_person = str(row.get('责任销售中英文', ''))
+                        else:
+                            sales_person = str(sales_raw)
+                        
+                        customer_info = {
+                            'id': str(row.get('用户ID', '')),
+                            'expiry_date': expiry_date.strftime('%Y年%m月%d日'),
+                            'jdy_account': str(row.get('用户ID', '')),
+                            'company_name': str(row.get('账号-企业名称', '')),
+                            'sales_person': sales_person
+                        }
+                        
+                        # 根据续费责任销售分类（使用处理后的sales_person）
+                        if '朱晓琳' in sales_person or 'Esther' in sales_person:
+                            esther_customers.append(customer_info)
+                        else:
+                            other_customers.append(customer_info)
+                            
+                except Exception as e:
+                    logger.warning(f"日期转换错误: {str(e)}")
+                    continue
+        
+        # 按过期日期排序
+        esther_customers.sort(key=lambda x: x['expiry_date'])
+        other_customers.sort(key=lambda x: x['expiry_date'])
+        
+        logger.info(f"找到{len(esther_customers)}个Esther负责的即将过期客户和{len(other_customers)}个其他销售负责的即将过期客户")
+        return jsonify({
+            'esther_customers': esther_customers,
+            'other_customers': other_customers
+        })
+
+    except Exception as e:
+        logger.error(f"获取未来即将过期客户失败: {str(e)}")
+        return jsonify({'error': f'获取未来即将过期客户失败: {str(e)}'}), 500
+
+@app.route('/get_unsigned_customers')
+@login_required
+def get_unsigned_customers():
+    """获取最近30天内客户数据，支持状态筛选"""
+    try:
+        # 获取筛选参数
+        status_filter = request.args.get('status', 'all')  # all, na, contract, invoice, paid
+        
+        # 检查文件是否存在
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件: {excel_path}")
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'customers': [], 'error': '数据文件不存在'}), 500
+
+        try:
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'customers': [], 'error': '数据文件读取失败'}), 500
+
+        # 检查必要的列是否存在
+        required_columns = ['用户ID', '账号-企业名称', '到期日期', '客户阶段']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f"Excel文件中缺少必要列: {missing_columns}")
+            return jsonify({'customers': [], 'error': f'数据格式错误：缺少必要列 {missing_columns}'}), 500
+        
+        # 获取当前日期
+        now = datetime.now()
+        today = now.date()
+        thirty_days_later = today + pd.Timedelta(days=30)
+        
+        # 筛选出未来30天内到期的客户
+        filtered_customers = []
+        for _, row in df.iterrows():
+            # 检查到期日期是否在最近30天内
+            if pd.notna(row['到期日期']):
+                try:
+                    expiry_date = pd.to_datetime(row['到期日期']).date()
+                    # 如果到期日期在未来30天内
+                    if today <= expiry_date <= thirty_days_later:
+                        # 获取客户阶段
+                        customer_stage = row.get('客户阶段', '')
+                        stage_normalized = ''
+                        if pd.notna(customer_stage) and str(customer_stage).strip() != '' and str(customer_stage).lower() != 'nan':
+                            stage_normalized = str(customer_stage).strip()
+                        
+                        # 根据状态筛选
+                        should_include = False
+                        if status_filter == 'all':
+                            should_include = True
+                        elif status_filter == 'na' and stage_normalized == '':
+                            should_include = True
+                        elif status_filter == 'contract' and '合同' in stage_normalized:
+                            should_include = True
+                        elif status_filter == 'invoice' and '开票' in stage_normalized:
+                            should_include = True
+                        elif status_filter == 'advance_invoice' and '提前开' in stage_normalized:
+                            should_include = True
+                        elif status_filter == 'paid' and ('回款' in stage_normalized or '已付' in stage_normalized):
+                            should_include = True
+                        
+                        if should_include:
+                            # 处理责任销售字段
+                            sales_raw = row.get('续费责任销售', '')
+                            if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                                sales_person = str(row.get('责任销售中英文', ''))
+                            else:
+                                sales_person = str(sales_raw)
+                            
+                            # 计算距离到期的天数
+                            days_until_expiry = (expiry_date - today).days
+                            if days_until_expiry == 0:
+                                date_label = "今天到期"
+                            elif days_until_expiry == 1:
+                                date_label = "明天到期"
+                            else:
+                                date_label = f"{days_until_expiry}天后到期"
+                            
+                            filtered_customers.append({
+                                'expiry_date': f"{date_label} ({expiry_date.strftime('%Y年%m月%d日')})",
+                                'jdy_account': str(row.get('用户ID', '')),
+                                'company_name': str(row.get('账号-企业名称', '')),
+                                'sales_person': sales_person,
+                                'customer_stage': stage_normalized if stage_normalized else 'NA',
+                                'days_until_expiry': days_until_expiry
+                            })
+                except Exception as e:
+                    logger.warning(f"日期转换错误: {str(e)}")
+                    continue
+        
+        # 按到期日期排序（最近到期的在前）
+        filtered_customers.sort(key=lambda x: x['days_until_expiry'])
+        
+        # 获取所有未来30天内的客户（不考虑状态筛选）用于计算各状态的数量
+        all_customers_30days = []
+        for _, row in df.iterrows():
+            if pd.notna(row['到期日期']):
+                try:
+                    expiry_date = pd.to_datetime(row['到期日期']).date()
+                    if today <= expiry_date <= thirty_days_later:
+                        customer_stage = row.get('客户阶段', '')
+                        stage_normalized = ''
+                        if pd.notna(customer_stage) and str(customer_stage).strip() != '' and str(customer_stage).lower() != 'nan':
+                            stage_normalized = str(customer_stage).strip()
+                        
+                        all_customers_30days.append({
+                            'customer_stage': stage_normalized if stage_normalized else 'NA'
+                        })
+                except Exception:
+                    continue
+        
+        # 获取所有可用的状态选项
+        all_stages = set()
+        for customer in all_customers_30days:
+            stage = customer['customer_stage']
+            if stage != 'NA':
+                all_stages.add(stage)
+        
+        available_statuses = [
+            {'value': 'all', 'label': '全部状态', 'count': len(all_customers_30days)},
+            {'value': 'na', 'label': 'NA状态', 'count': len([c for c in all_customers_30days if c['customer_stage'] == 'NA'])}
+        ]
+        
+        # 动态添加其他状态
+        for stage in sorted(all_stages):
+            if '合同' in stage:
+                available_statuses.append({'value': 'contract', 'label': '合同状态', 'count': len([c for c in all_customers_30days if '合同' in c['customer_stage']])})
+            elif '开票' in stage:
+                available_statuses.append({'value': 'invoice', 'label': '开票状态', 'count': len([c for c in all_customers_30days if '开票' in c['customer_stage']])})
+            elif '提前开' in stage:
+                available_statuses.append({'value': 'advance_invoice', 'label': '提前开状态', 'count': len([c for c in all_customers_30days if '提前开' in c['customer_stage']])})
+            elif '回款' in stage or '已付' in stage:
+                available_statuses.append({'value': 'paid', 'label': '回款状态', 'count': len([c for c in all_customers_30days if '回款' in c['customer_stage'] or '已付' in c['customer_stage']])})
+        
+        # 去重
+        seen_values = set()
+        unique_statuses = []
+        for status in available_statuses:
+            if status['value'] not in seen_values:
+                seen_values.add(status['value'])
+                unique_statuses.append(status)
+        
+        logger.info(f"找到{len(filtered_customers)}个未来30天内的客户（筛选条件: {status_filter}）")
+        return jsonify({
+            'customers': filtered_customers,
+            'total_count': len(filtered_customers),
+            'query_date': today.strftime('%Y年%m月%d日'),
+            'current_filter': status_filter,
+            'available_statuses': unique_statuses
+        })
+
+    except Exception as e:
+        logger.error(f"获取客户数据失败: {str(e)}")
+        return jsonify({
+            'customers': [], 
+            'error': f'获取客户信息时出现问题',
+            'query_date': datetime.now().strftime('%Y年%m月%d日')
+        }), 500
+
+@app.route('/get_expiring_customers')
+@login_required
+def get_expiring_customers():
+    try:
+        # 获取当前日期
+        now = datetime.now()
+        today = now.date()
+        
+        # 检查文件是否存在
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件: {excel_path}")
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'expiring_customers': [], 'error': '数据文件不存在', 'today_date': today.strftime('%Y年%m月%d日')})
+
+        try:
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'expiring_customers': [], 'error': '数据文件读取失败', 'today_date': today.strftime('%Y年%m月%d日')})
+
+        if '到期日期' not in df.columns or '用户ID' not in df.columns or '账号-企业名称' not in df.columns:
+            logger.error("Excel文件中缺少必要列")
+            return jsonify({'expiring_customers': [], 'error': '数据格式错误：缺少必要列', 'today_date': today.strftime('%Y年%m月%d日')})
+        
+        # 定义节假日（可以根据需要扩展）
+        holidays = [
+            # 2024年节假日
+            '2024-01-01', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-15', '2024-02-16', '2024-02-17',
+            '2024-04-04', '2024-04-05', '2024-04-06',
+            '2024-05-01', '2024-05-02', '2024-05-03',
+            '2024-06-10',
+            '2024-09-15', '2024-09-16', '2024-09-17',
+            '2024-10-01', '2024-10-02', '2024-10-03', '2024-10-04', '2024-10-05', '2024-10-06', '2024-10-07',
+            # 2025年节假日
+            '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03',
+            '2025-04-05', '2025-04-06', '2025-04-07',
+            '2025-05-01', '2025-05-02', '2025-05-03',
+            '2025-06-09',
+            '2025-09-06', '2025-09-07', '2025-09-08',
+            '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07'
+        ]
+        
+        holiday_dates = [datetime.strptime(h, '%Y-%m-%d').date() for h in holidays]
+        
+        # 判断提醒逻辑
+        weekday = today.weekday()  # 0=周一, 1=周二, ..., 6=周日
+        target_dates = []
+        reminder_type = ""
+        
+        # 检查是否是节假日前一天
+        is_before_holiday = False
+        holiday_period = []
+        
+        for holiday in holiday_dates:
+            if holiday == today + pd.Timedelta(days=1):  # 明天是节假日
+                is_before_holiday = True
+                # 找到连续的节假日期间
+                current_date = holiday
+                while current_date in holiday_dates:
+                    holiday_period.append(current_date)
+                    current_date += pd.Timedelta(days=1)
+                break
+        
+        if is_before_holiday:
+            # 节假日前一天：提醒节假日期间到期的客户
+            target_dates = holiday_period
+            reminder_type = f"节假日期间到期提醒（{holiday_period[0].strftime('%m月%d日')}至{holiday_period[-1].strftime('%m月%d日')}）"
+            logger.info(f"节假日前一天，提醒节假日期间到期的客户: {target_dates}")
+        elif weekday == 4:  # 周五
+            # 周五：提醒周六和周日到期的客户
+            saturday = today + pd.Timedelta(days=1)
+            sunday = today + pd.Timedelta(days=2)
+            target_dates = [saturday, sunday]
+            reminder_type = "周末到期提醒"
+            logger.info("周五，提醒周末到期的客户")
+        elif weekday < 4:  # 周一到周四
+            # 平时：提醒明天到期的客户
+            tomorrow = today + pd.Timedelta(days=1)
+            target_dates = [tomorrow]
+            reminder_type = "明天到期提醒"
+            logger.info("工作日，提醒明天到期的客户")
+        else:  # 周六、周日
+            # 周末不提醒
+            logger.info("今天是周末，不显示到期客户提醒")
+            return jsonify({
+                'expiring_customers': [], 
+                'message': '周末愉快，暂不显示到期提醒',
+                'today_date': today.strftime('%Y年%m月%d日'),
+                'reminder_type': '周末休息'
+            })
+        
+        # 筛选出目标日期到期的客户
+        expiring_customers = []
+        for _, row in df.iterrows():
+            if pd.notna(row['到期日期']):
+                try:
+                    expiry_date = pd.to_datetime(row['到期日期']).date()
+                    if expiry_date in target_dates:
+                        # 处理责任销售字段
+                        sales_raw = row.get('续费责任销售', '')
+                        if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                            sales_person = str(row.get('责任销售中英文', ''))
+                        else:
+                            sales_person = str(sales_raw)
+                        
+                        # 计算距离到期的天数
+                        days_until_expiry = (expiry_date - today).days
+                        if days_until_expiry == 0:
+                            date_label = "今天到期"
+                        elif days_until_expiry == 1:
+                            date_label = "明天到期"
+                        else:
+                            date_label = f"{days_until_expiry}天后到期"
+                        
+                        expiring_customers.append({
+                            'expiry_date': f"{date_label} ({expiry_date.strftime('%Y年%m月%d日')})",
+                            'jdy_account': str(row.get('用户ID', '')),
+                            'company_name': str(row.get('账号-企业名称', '')),
+                            'sales_person': sales_person,
+                            'days_until_expiry': days_until_expiry
+                        })
+                except Exception as e:
+                    logger.warning(f"日期转换错误: {str(e)}")
+                    continue
+        
+        # 按到期日期排序
+        expiring_customers.sort(key=lambda x: x['days_until_expiry'])
+        
+        if len(expiring_customers) == 0:
+            # 根据提醒类型显示更具体的信息
+            if reminder_type == "明天到期提醒":
+                message = "😊 明天没有客户到期"
+            elif reminder_type == "周末到期提醒":
+                message = "😊 这个周末没有客户到期"
+            elif "节假日期间到期提醒" in reminder_type:
+                message = f"😊 {reminder_type.split('（')[1].split('）')[0]}期间没有客户到期"
+            else:
+                message = "😊 近期没有客户到期"
+            
+            logger.info(message)
+            return jsonify({
+                'expiring_customers': [], 
+                'message': message,
+                'today_date': today.strftime('%Y年%m月%d日'),
+                'reminder_type': reminder_type
+            })
+        else:
+            logger.info(f"找到{len(expiring_customers)}个即将过期的客户")
+            return jsonify({
+                'expiring_customers': expiring_customers,
+                'today_date': today.strftime('%Y年%m月%d日'),
+                'reminder_type': reminder_type
+            })
+
+    except Exception as e:
+        logger.error(f"获取即将过期客户失败: {str(e)}")
+        return jsonify({
+            'expiring_customers': [], 
+            'error': f'获取客户信息时出现问题',
+            'today_date': datetime.now().strftime('%Y年%m月%d日'),
+            'reminder_type': '系统错误'
+        })
+
+@app.route('/query_customer', methods=['POST'])
+@login_required
+def query_customer():
+    try:
+        if not request.json or ('jdy_id' not in request.json and 'company_name' not in request.json):
+            logger.warning("请求中缺少查询参数")
+            return jsonify({'error': '请提供简道云账号或公司名称'}), 400
+            
+        # 获取查询参数
+        jdy_id = request.json.get('jdy_id', '')
+        company_name = request.json.get('company_name', '')
+        
+        # 记录查询参数
+        if jdy_id:
+            logger.info(f"开始通过简道云账号查询: {jdy_id}")
+        if company_name:
+            logger.info(f"开始通过公司名称查询: {company_name}")
+        
+        # 检查文件是否存在
+        excel_path = '六大战区简道云客户.xlsx'
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'error': '数据文件不存在'}), 500
+
+        try:
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'error': '数据文件读取失败'}), 500
+
+        # 检查必要的列是否存在
+        required_columns = ['用户ID', '公司名称']
+        for col in required_columns:
+            if col not in df.columns:
+                logger.error(f"Excel文件中缺少'{col}'列")
+                return jsonify({'error': f'数据格式错误：缺少{col}列'}), 500
+        
+        # 根据查询条件进行模糊匹配
+        if jdy_id:
+            matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
+        else:
+            # 修复：应该查询"公司名称"列，而不是"账号-企业名称"列
+            matching_rows = df[df['公司名称'].astype(str).str.contains(str(company_name), case=False, na=False)]
+            
+        if matching_rows.empty:
+            query_type = "简道云账号" if jdy_id else "公司名称"
+            query_value = jdy_id if jdy_id else company_name
+            logger.info(f"未找到匹配的客户信息，查询{query_type}: {query_value}")
+            return jsonify({'error': '未找到客户信息'}), 404
+
+        # 处理多条匹配记录
+        results = []
+        for _, customer_data in matching_rows.iterrows():
+            # 处理新字段映射
+            account_enterprise_name = str(customer_data.get('账号-企业名称', ''))
+            integration_mode = str(customer_data.get('集成模式', ''))
+            customer_classification = str(customer_data.get('客户分类', ''))
+            
+            # 处理责任销售字段 - 优先使用续费责任销售，如果为空则使用责任销售中英文
+            sales_raw = customer_data.get('续费责任销售', '')
+            if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
+                sales = str(customer_data.get('责任销售中英文', ''))
+            else:
+                sales = str(sales_raw)
+            
+            sales_cn_en = str(customer_data.get('责任销售中英文', ''))
+            jdy_sales = str(customer_data.get('简道云销售', ''))
+            
+            logger.info(f"处理客户数据: {customer_data['用户ID']}, 账号-企业名称: {account_enterprise_name}, "
+                      f"集成模式: {integration_mode}, 客户分类: {customer_classification}, "
+                      f"续费责任销售: {sales}, 责任销售中英文: {sales_cn_en}, 简道云销售: {jdy_sales}")
+            
+            # 处理到期日期
+            expiry_date = ''
+            if '到期日期' in customer_data and pd.notna(customer_data['到期日期']):
+                try:
+                    expiry_date = pd.to_datetime(customer_data['到期日期']).strftime('%Y年%m月%d日')
+                    logger.info(f"到期日期: {expiry_date}")
+                except Exception as e:
+                    logger.warning(f"日期转换错误: {str(e)}")
+                    expiry_date = ''
+            
+            # 处理ARR
+            try:
+                arr_value = customer_data.get('应续ARR', 0)
+                if pd.isna(arr_value) or arr_value == '' or float(str(arr_value).replace(',', '')) == 0:
+                    arr_display = '0元'
+                else:
+                    arr_display = f"{float(str(arr_value).replace(',', ''))}元"
+                logger.info(f"应续ARR: {arr_display}")
+            except Exception as e:
+                logger.warning(f"ARR处理错误: {str(e)}")
+                arr_display = '0元'
+            
+            results.append({
+                'account_enterprise_name': account_enterprise_name,  # 账号-企业名称
+                'company_name': str(customer_data.get('公司名称', '')),  # 公司名称
+                'tax_number': str(customer_data.get('税号', '')),  # 税号
+                'integration_mode': integration_mode,  # 集成模式
+                'expiry_date': expiry_date,  # 到期日期
+                'uid_arr': arr_display,  # 应续ARR
+                'customer_classification': customer_classification,  # 客户分类
+                'sales': sales,  # 续费责任销售
+                'sales_cn_en': sales_cn_en,  # 责任销售中英文
+                'jdy_sales': jdy_sales,  # 简道云销售
+                'user_id': str(customer_data.get('用户ID', ''))  # 保留用户ID用于兼容
+            })
+
+        logger.info(f"查询成功，找到{len(results)}条匹配记录")
+        return jsonify({'results': results})
+
+    except Exception as e:
+        logger.error(f"查询出错: {str(e)}")
+        return jsonify({'error': f'查询出错: {str(e)}'}), 500
+
+@app.route('/update_stage', methods=['POST'])
+@login_required
+def update_stage():
+    """更新客户阶段状态（使用优化的状态管理器）"""
+    try:
+        data = request.get_json()
+        if not data or 'jdy_id' not in data or 'stage' not in data:
+            return jsonify({'success': False, 'error': '缺少必要参数', 'error_type': 'validation'}), 400
+        
+        jdy_id = data['jdy_id']
+        stage = data['stage']
+        force = data.get('force', False)  # 是否强制更新
+        
+        logger.info(f"更新客户阶段: {jdy_id} -> {stage} (force={force})")
+        
+        # 使用新的状态管理器
+        if stage_manager:
+            result = stage_manager.update_stage(
+                jdy_id=jdy_id,
+                target_stage=stage,
+                force=force,
+                metadata={
+                    'source': 'web_interface',
+                    'user_agent': request.headers.get('User-Agent', ''),
+                    'ip': request.remote_addr,
+                    'timestamp': datetime.now().isoformat()
+                }
+            )
+            
+            # 根据结果返回适当的HTTP状态码
+            if result['success']:
+                return jsonify(result), 200
+            else:
+                error_type = result.get('error_type', 'unknown')
+                if error_type == 'validation':
+                    return jsonify(result), 400
+                elif error_type == 'customer_not_found':
+                    return jsonify(result), 404
+                elif error_type == 'conflict':
+                    return jsonify(result), 409
+                else:
+                    return jsonify(result), 500
+        else:
+            # 降级到原有逻辑
+            logger.warning("状态管理器不可用，使用原有逻辑")
+            return _legacy_update_stage(jdy_id, stage)
+        
+    except Exception as e:
+        logger.error(f"更新阶段失败: {str(e)}")
+        return jsonify({
+            'success': False, 
+            'error': str(e),
+            'error_type': 'system_error'
+        }), 500
+
+def _legacy_update_stage(jdy_id, stage):
+    """原有的状态更新逻辑（降级方案）"""
+    try:
+        # 读取Excel文件
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        if not os.path.exists(excel_path):
+            logger.error(f"Excel文件不存在: {excel_path}")
+            return jsonify({'success': False, 'error': 'Excel文件不存在', 'error_type': 'file_not_found'}), 500
+        
+        # 读取Excel文件
+        df = pd.read_excel(excel_path)
+        logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        
+        # 检查必要的列是否存在
+        if '用户ID' not in df.columns:
+            logger.error("Excel文件中缺少'用户ID'列")
+            return jsonify({'success': False, 'error': 'Excel文件格式错误：缺少用户ID列', 'error_type': 'column_missing'}), 500
+        
+        # 查找匹配的客户记录
+        matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
+        
+        if matching_rows.empty:
+            logger.warning(f"未找到匹配的客户记录: {jdy_id}")
+            return jsonify({'success': False, 'error': f'未找到客户记录: {jdy_id}', 'error_type': 'customer_not_found'}), 404
+        
+        # 检查是否有阶段列，如果没有则创建
+        stage_column = '客户阶段'
+        if stage_column not in df.columns:
+            df[stage_column] = ''
+            logger.info(f"创建新列: {stage_column}")
+        
+        # 更新匹配记录的阶段
+        updated_count = 0
+        for index in matching_rows.index:
+            old_stage = df.loc[index, stage_column] if pd.notna(df.loc[index, stage_column]) else '未设置'
+            df.loc[index, stage_column] = stage
+            updated_count += 1
+            logger.info(f"更新记录 {index}: {old_stage} -> {stage}")
+        
+        # 保存更新后的Excel文件
+        df.to_excel(excel_path, index=False)
+        logger.info(f"Excel文件已更新，共更新 {updated_count} 条记录")
+        
+        return jsonify({
+            'success': True,
+            'message': f'客户 {jdy_id} 已成功推进到 {stage} 阶段（更新了 {updated_count} 条记录）',
+            'updated_count': updated_count
+        })
+        
+    except Exception as e:
+         logger.error(f"Excel文件操作失败: {str(e)}")
+         return jsonify({'success': False, 'error': f'Excel文件操作失败: {str(e)}', 'error_type': 'file_operation_error'}), 500
+
+@app.route('/stage_history', methods=['GET'])
+@login_required
+def get_stage_history():
+    """获取状态变更历史"""
+    try:
+        jdy_id = request.args.get('jdy_id')
+        limit = int(request.args.get('limit', 100))
+        
+        if stage_manager:
+            history = stage_manager.get_stage_history(jdy_id, limit)
+            return jsonify({
+                'success': True,
+                'history': history,
+                'count': len(history)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '状态管理器不可用',
+                'error_type': 'service_unavailable'
+            }), 503
+            
+    except Exception as e:
+        logger.error(f"获取状态历史失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_type': 'system_error'
+        }), 500
+
+@app.route('/validate_stage_batch', methods=['POST'])
+@login_required
+def validate_stage_batch():
+    """批量状态校验"""
+    try:
+        data = request.get_json()
+        if not data or 'updates' not in data:
+            return jsonify({
+                'success': False,
+                'error': '缺少必要参数：updates',
+                'error_type': 'validation'
+            }), 400
+        
+        updates = data['updates']
+        if not isinstance(updates, list):
+            return jsonify({
+                'success': False,
+                'error': 'updates必须是数组',
+                'error_type': 'validation'
+            }), 400
+        
+        if stage_manager:
+            results = stage_manager.validate_stage_batch(updates)
+            return jsonify({
+                'success': True,
+                'results': results
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '状态管理器不可用',
+                'error_type': 'service_unavailable'
+            }), 503
+            
+    except Exception as e:
+        logger.error(f"批量状态校验失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_type': 'system_error'
+        }), 500
+
+@app.route('/stage_rules', methods=['GET'])
+@login_required
+def get_stage_rules():
+    """获取状态转换规则"""
+    try:
+        if stage_manager:
+            return jsonify({
+                'success': True,
+                'stage_rules': stage_manager.stage_rules,
+                'stage_priority': stage_manager.stage_priority
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': '状态管理器不可用',
+                'error_type': 'service_unavailable'
+            }), 503
+            
+    except Exception as e:
+        logger.error(f"获取状态规则失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'error_type': 'system_error'
+        }), 500
+
+@app.route('/docx_templates/<template_name>')
+def get_template(template_name):
+    if not template_name.endswith('.docx'):
+        return '不支持的文件类型', 400
+
+    try:
+        # 从docx_templates目录加载模板文件
+        template_path = os.path.join(os.getcwd(), 'templates', 'docx_templates', template_name)
+        if not os.path.exists(template_path):
+            logger.error(f"模板文件不存在: {template_path}")
+            return '模板文件不存在', 404
+
+        logger.info(f"正在加载模板文件: {template_path}")
+        return send_file(
+            template_path,
+            as_attachment=False,  # 不作为附件发送，这样浏览器不会下载而是直接传给前端
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+    except Exception as e:
+        logger.error(f"模板文件访问错误: {str(e)}")
+        return '模板文件访问错误', 500
+
+@app.route('/generate', methods=['POST'])
+@login_required
+def generate():
+    temp_template = None
+    temp_output = None
+    
+    try:
+        logger.info("开始处理文件上传请求")
+        
+        # 检查是否有文件上传
+        if 'template' not in request.files:
+            logger.error("请求中没有找到文件")
+            return '请选择合同模板文件', 400
+            
+        template_file = request.files['template']
+        if not template_file or not template_file.filename:
+            logger.error("没有选择文件")
+            return '请选择合同模板文件', 400
+            
+        if not template_file.filename.endswith('.docx'):
+            logger.error("文件格式不正确")
+            return '请选择.docx格式的文件', 400
+
+        logger.info(f"接收到文件: {template_file.filename}")
+
+        # 创建临时文件保存上传的模板
+        temp_template = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)
+        template_file.save(temp_template.name)
+        logger.info(f"模板文件已保存到临时文件: {temp_template.name}")
+        
+        # 获取表单数据
+        form_data = request.form.to_dict()
+        
+        # 处理多选值
+        contract_types = request.form.getlist('contract_type')
+        if contract_types:
+            form_data['contract_types'] = ', '.join(contract_types)
+        
+        logger.info(f"接收到的表单数据: {form_data}")
+        
+        # 创建临时文件用于保存生成的合同
+        temp_output = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)
+        logger.info(f"创建输出临时文件: {temp_output.name}")
+
+        # 检查模板处理器是否可用
+        if not TEMPLATE_HANDLER_AVAILABLE:
+            logger.error("模板处理器不可用")
+            return '模板处理器不可用，请检查依赖包是否正确安装', 500
+            
+        # 处理模板
+        handler = TemplateHandler(temp_template.name)
+        output_path = handler.process_template(form_data, temp_output.name)
+        logger.info(f"合同生成完成，输出文件: {output_path}")
+
+        # 返回生成的文件
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=f"{form_data['start_year']}-{form_data['end_year']}+{form_data['company_name']}+帆软简道云续费合同+{datetime.now().strftime('%Y%m%d')}.docx",
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+
+    except Exception as e:
+        logger.error(f"发生错误: {str(e)}")
+        return f'生成合同时发生错误: {str(e)}', 500
+
+    finally:
+        # 清理临时文件
+        try:
+            if temp_template:
+                os.unlink(temp_template.name)
+                logger.info(f"清理临时模板文件: {temp_template.name}")
+            if temp_output:
+                os.unlink(temp_output.name)
+                logger.info(f"清理临时输出文件: {temp_output.name}")
+        except Exception as e:
+            logger.error(f"清理临时文件时发生错误: {str(e)}")
+
+@app.route('/parse_text', methods=['POST'])
+@login_required
+def parse_text():
+    """解析粘贴板文本内容"""
+    try:
+        data = request.get_json()
+        if not data or 'text' not in data:
+            return jsonify({'success': False, 'error': '没有提供文本内容'}), 400
+        
+        text = data['text'].strip()
+        if not text:
+            return jsonify({'success': False, 'error': '文本内容为空'}), 400
+        
+        logger.info(f"开始解析文本，长度: {len(text)} 字符")
+        logger.info(f"实际文本内容: {repr(text)}")  # 添加详细日志
+        
+        # 使用OCR服务的文本解析功能
+        if ocr_service:
+            parsed_fields = ocr_service.parse_text_to_fields(text)
+            
+            # 检测O/0混淆警告
+            warnings = []
+            if 'tax_number' in parsed_fields:
+                tax_number = parsed_fields['tax_number']
+                # 检测税号中是否包含字母O或数字0（任意一个都提醒）
+                if 'O' in tax_number or '0' in tax_number:
+                    warnings.append({
+                        'type': 'ocr_confusion',
+                        'field': 'tax_number',
+                        'message': '税号包含0/O,请注意检查🧐',
+                        'suggestion': ''
+                    })
+            
+            logger.info(f"文本解析成功，识别到 {len(parsed_fields)} 个字段，{len(warnings)} 个警告")
+            return jsonify({
+                'success': True,
+                'fields': parsed_fields,
+                'field_count': len(parsed_fields),
+                'warnings': warnings
+            })
+        else:
+            # 如果OCR服务不可用，使用简单的文本解析
+            parsed_fields = simple_text_parse(text)
+            logger.info(f"简单文本解析完成，识别到 {len(parsed_fields)} 个字段")
+            return jsonify({
+                'success': True,
+                'fields': parsed_fields,
+                'field_count': len(parsed_fields)
+            })
+    
+    except Exception as e:
+        logger.error(f"文本解析异常: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'文本解析失败: {str(e)}',
+            'fields': {},
+            'field_count': 0
+        }), 500
+
+@app.route('/ocr_image', methods=['POST'])
+@login_required
+def ocr_image():
+    """处理OCR图片识别请求（base64格式）"""
+    try:
+        data = request.get_json()
+        if not data or 'image' not in data:
+            return jsonify({'success': False, 'error': '没有提供图片数据'}), 400
+        
+        image_data = data['image']
+        if not image_data:
+            return jsonify({'success': False, 'error': '图片数据为空'}), 400
+        
+        # 处理base64图片数据
+        if image_data.startswith('data:image'):
+            # 移除data:image/xxx;base64,前缀
+            image_data = image_data.split(',')[1]
+        
+        try:
+            import base64
+            image_bytes = base64.b64decode(image_data)
+        except Exception as e:
+            return jsonify({'success': False, 'error': '图片数据格式错误'}), 400
+        
+        # 检查文件大小（限制为10MB）
+        if len(image_bytes) > 10 * 1024 * 1024:
+            return jsonify({'success': False, 'error': '图片大小超过限制（10MB）'}), 400
+        
+        logger.info(f"开始处理OCR请求，图片大小: {len(image_bytes)} bytes")
+        
+        # 使用OCR服务处理图片
+        if ocr_service:
+            # 使用process_image方法而不是extract_text_from_image
+            result = ocr_service.process_image(image_bytes)
+            if result['success']:
+                # 检测O/0混淆警告
+                warnings = []
+                parsed_fields = result.get('parsed_fields', {})
+                if 'tax_number' in parsed_fields:
+                    tax_number = parsed_fields['tax_number']
+                    # 检测税号中是否包含字母O或数字0（任意一个都提醒）
+                    if 'O' in tax_number or '0' in tax_number:
+                        warnings.append({
+                            'type': 'ocr_confusion',
+                            'field': 'tax_number',
+                            'message': '税号包含0/O,请注意检查🧐',
+                            'suggestion': ''
+                        })
+                
+                logger.info(f"OCR处理成功，提取文本长度: {len(result.get('extracted_text', ''))}")
+                return jsonify({
+                    'success': True,
+                    'text': result.get('extracted_text', ''),
+                    'confidence': 0.8,  # 默认置信度
+                    'fields': result.get('parsed_fields', {}),
+                    'field_count': result.get('field_count', 0),
+                    'warnings': warnings
+                })
+            else:
+                logger.error(f"OCR处理失败: {result.get('error', '未知错误')}")
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'OCR识别失败'),
+                    'text': ''
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'OCR服务暂时不可用，请使用粘贴板功能',
+                'text': ''
+            })
+    
+    except Exception as e:
+        logger.error(f"OCR图片处理异常: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'图片处理失败: {str(e)}',
+            'text': ''
+        }), 500
+
+def simple_text_parse(text):
+    """简单的文本解析功能，当OCR服务不可用时使用"""
+    import re
+    
+    fields = {}
+    
+    # 定义字段匹配规则
+    patterns = {
+        'company_name': [
+            r'公司名称[：:]\s*(.+?)(?:\n|$)',
+            r'企业名称[：:]\s*(.+?)(?:\n|$)',
+            r'名\s*称[：:]\s*(.+?)(?:\n|$)',
+            r'单位名称[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'tax_number': [
+            r'税号[：:]\s*([A-Z0-9]{15,20})(?:\n|$)',
+            r'纳税人识别号[：:]\s*([A-Z0-9]{15,20})(?:\n|$)',
+            r'统一社会信用代码[：:]\s*([A-Z0-9]{15,20})(?:\n|$)'
+        ],
+        'reg_address': [
+            r'注册地址[：:]\s*(.+?)(?:\n|$)',
+            r'地\s*址[：:]\s*(.+?)(?:\n|$)',
+            r'注册地[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'reg_phone': [
+            r'注册电话[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'电\s*话[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'联系电话[：:]\s*([0-9\-\s]+)(?:\n|$)'
+        ],
+        'bank_name': [
+            r'开户行[：:]\s*(.+?)(?:\n|$)',
+            r'开户银行[：:]\s*(.+?)(?:\n|$)',
+            r'银行名称[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'bank_account': [
+            r'账号[：:]\s*([0-9\s]+)(?:\n|$)',
+            r'银行账号[：:]\s*([0-9\s]+)(?:\n|$)',
+            r'账户[：:]\s*([0-9\s]+)(?:\n|$)'
+        ],
+        'contact_name': [
+            r'联系人[：:]\s*(.+?)(?:\n|$)',
+            r'负责人[：:]\s*(.+?)(?:\n|$)',
+            r'经办人[：:]\s*(.+?)(?:\n|$)'
+        ],
+        'contact_phone': [
+            r'联系人电话[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'手机[：:]\s*([0-9\-\s]+)(?:\n|$)',
+            r'移动电话[：:]\s*([0-9\-\s]+)(?:\n|$)'
+        ],
+        'mail_address': [
+            r'邮寄地址[：:]\s*(.+?)(?:\n|$)',
+            r'通讯地址[：:]\s*(.+?)(?:\n|$)',
+            r'收件地址[：:]\s*(.+?)(?:\n|$)'
+        ]
+    }
+    
+    # 对每个字段进行匹配
+    for field_name, field_patterns in patterns.items():
+        for pattern in field_patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match:
+                value = match.group(1).strip()
+                if value and len(value) > 0:
+                    fields[field_name] = value
+                    break
+    
+    return fields
+
+@app.route('/ocr_process', methods=['POST'])
+def ocr_process():
+    """处理OCR图片识别请求"""
+    try:
+        # 检查OCR服务是否可用
+        if ocr_service is None:
+            return jsonify({
+                'success': False,
+                'error': 'OCR服务暂时不可用，请稍后再试'
+            }), 503
+
+        # 检查是否有文件上传
+        if 'image' not in request.files:
+            return jsonify({'success': False, 'error': '没有上传图片文件'}), 400
+
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': '没有选择文件'}), 400
+
+        # 检查文件类型
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'webp'}
+        file_ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+
+        if file_ext not in allowed_extensions:
+            return jsonify({'success': False, 'error': '不支持的文件格式'}), 400
+
+        # 读取图片数据
+        image_data = file.read()
+
+        # 检查文件大小（限制为10MB）
+        if len(image_data) > 10 * 1024 * 1024:
+            return jsonify({'success': False, 'error': '文件大小超过限制（10MB）'}), 400
+
+        logger.info(f"开始处理OCR请求，文件大小: {len(image_data)} bytes")
+
+        # 使用OCR服务处理图片
+        result = ocr_service.process_image(image_data)
+
+        if result['success']:
+            logger.info(f"OCR处理成功，识别到 {result['field_count']} 个字段")
+            return jsonify(result)
+        else:
+            logger.error(f"OCR处理失败: {result.get('error', '未知错误')}")
+            # 对于OCR不可用的情况，返回200状态码但success=False
+            # 这样前端可以正确处理错误信息
+            return jsonify(result), 200
+
+    except Exception as e:
+        logger.error(f"OCR处理异常: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'服务器处理错误: {str(e)}',
+            'extracted_text': '',
+            'parsed_fields': {},
+            'field_count': 0
+        }), 500
+
+@app.route('/monitor_downloads', methods=['POST'])
+@login_required
+def monitor_downloads():
+    """监控下载文件夹中的合同文件并自动更新客户状态"""
+    try:
+        import os
+        from pathlib import Path
+        import time
+        import re
+        
+        # 获取用户的下载文件夹路径
+        downloads_path = str(Path.home() / "Downloads")
+        
+        # 检查下载文件夹是否存在
+        if not os.path.exists(downloads_path):
+            return jsonify({
+                'success': False, 
+                'error': '无法访问下载文件夹',
+                'path': downloads_path
+            }), 400
+        
+        # 获取最近30分钟内的合同文件
+        current_time = time.time()
+        recent_contracts = []
+        
+        try:
+            for file_path in Path(downloads_path).glob("*.docx"):
+                # 检查文件修改时间（最近30分钟内）
+                file_mtime = file_path.stat().st_mtime
+                if current_time - file_mtime <= 1800:  # 30分钟 = 1800秒
+                    # 检查文件名是否包含合同相关关键词
+                    filename = file_path.name
+                    if any(keyword in filename for keyword in ['合同', '续费', '帆软', '简道云']):
+                        # 尝试从文件名中提取简道云账号
+                        jdy_account = extract_jdy_account_from_filename(filename)
+                        recent_contracts.append({
+                            'filename': filename,
+                            'path': str(file_path),
+                            'mtime': file_mtime,
+                            'jdy_account': jdy_account
+                        })
+        except Exception as e:
+            logger.error(f"扫描下载文件夹失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'error': f'扫描文件夹失败: {str(e)}'
+            }), 500
+        
+        # 自动推进找到简道云账号的合同到"合同"阶段
+        updated_contracts = []
+        for contract in recent_contracts:
+            if contract['jdy_account']:
+                try:
+                    # 调用更新阶段的逻辑
+                    result = update_customer_stage(contract['jdy_account'], '合同')
+                    if result['success']:
+                        updated_contracts.append({
+                            'filename': contract['filename'],
+                            'jdy_account': contract['jdy_account'],
+                            'status': 'updated'
+                        })
+                        # 记录已处理的文件
+                        processed_files[contract['path']] = current_time
+                        logger.info(f"自动推进合同成功: {contract['jdy_account']} -> 合同阶段")
+                    else:
+                        updated_contracts.append({
+                            'filename': contract['filename'],
+                            'jdy_account': contract['jdy_account'],
+                            'status': 'failed',
+                            'error': result.get('error', '未知错误')
+                        })
+                        # 即使失败也记录，避免重复尝试
+                        processed_files[contract['path']] = current_time
+                except Exception as e:
+                    logger.error(f"自动推进合同失败: {str(e)}")
+                    updated_contracts.append({
+                        'filename': contract['filename'],
+                        'jdy_account': contract['jdy_account'],
+                        'status': 'error',
+                        'error': str(e)
+                    })
+                    # 即使出错也记录，避免重复尝试
+                    processed_files[contract['path']] = current_time
+            else:
+                # 没有找到简道云账号的文件也记录，避免重复扫描
+                processed_files[contract['path']] = current_time
+        
+        return jsonify({
+            'success': True,
+            'downloads_path': downloads_path,
+            'recent_contracts': recent_contracts,
+            'updated_contracts': updated_contracts,
+            'total_found': len(recent_contracts),
+            'total_updated': len([c for c in updated_contracts if c['status'] == 'updated'])
+        })
+        
+    except Exception as e:
+        logger.error(f"监控下载文件夹失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'监控功能异常: {str(e)}'
+        }), 500
+
+def extract_jdy_account_from_filename(filename):
+    """从文件名中提取简道云账号"""
+    import re
+    
+    # 尝试多种模式匹配简道云账号
+    patterns = [
+        r'([a-f0-9]{24,})',  # 24位以上的十六进制字符串
+        r'([a-zA-Z0-9]{20,})',  # 20位以上的字母数字组合
+        r'jdy[_-]?([a-zA-Z0-9]+)',  # jdy前缀
+        r'账号[_-]?([a-zA-Z0-9]+)',  # 账号前缀
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, filename, re.IGNORECASE)
+        if match:
+            account = match.group(1)
+            # 验证账号长度和格式
+            if len(account) >= 15 and len(account) <= 50:
+                return account
+    
+    return None
+
+def update_customer_stage(jdy_id, stage):
+    """更新客户阶段的内部函数"""
+    try:
+        # 读取Excel文件
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        if not os.path.exists(excel_path):
+            return {'success': False, 'error': 'Excel文件不存在'}
+        
+        df = pd.read_excel(excel_path)
+        
+        # 检查必要的列是否存在
+        if '用户ID' not in df.columns:
+            return {'success': False, 'error': 'Excel文件格式错误：缺少用户ID列'}
+        
+        # 查找匹配的客户记录
+        matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
+        
+        if matching_rows.empty:
+            return {'success': False, 'error': f'未找到客户记录: {jdy_id}'}
+        
+        # 检查是否有阶段列，如果没有则创建
+        stage_column = '客户阶段'
+        if stage_column not in df.columns:
+            df[stage_column] = ''
+        
+        # 更新匹配记录的阶段
+        updated_count = 0
+        for index in matching_rows.index:
+            df.loc[index, stage_column] = stage
+            updated_count += 1
+        
+        # 保存更新后的Excel文件
+        df.to_excel(excel_path, index=False)
+        
+        return {
+            'success': True,
+            'message': f'客户 {jdy_id} 已成功推进到 {stage} 阶段',
+            'updated_count': updated_count
+        }
+        
+    except Exception as e:
+        return {'success': False, 'error': f'更新失败: {str(e)}'}
+
+def background_monitor_worker():
+    """后台监控工作线程"""
+    global auto_monitor_enabled, monitor_results, last_monitor_check
+    
+    while auto_monitor_enabled:
+        try:
+            with monitor_lock:
+                if not auto_monitor_enabled:
+                    break
+                    
+                # 执行监控检查
+                result = perform_monitor_check()
+                if result:
+                    monitor_results = result
+                    last_monitor_check = datetime.now()
+                    
+                    # 如果发现新合同，记录日志
+                    if result.get('total_found', 0) > 0:
+                        logger.info(f"自动监控发现 {result['total_found']} 个合同文件，成功推进 {result.get('total_updated', 0)} 个")
+                        
+        except Exception as e:
+            logger.error(f"后台监控异常: {str(e)}")
+            
+        # 等待30秒后继续下一次检查
+        time.sleep(30)
+    
+    logger.info("后台监控线程已停止")
+
+def perform_monitor_check():
+    """执行监控检查的核心逻辑"""
+    global processed_files
+    try:
+        # 获取用户的下载文件夹路径
+        downloads_path = str(Path.home() / "Downloads")
+        
+        # 检查下载文件夹是否存在
+        if not os.path.exists(downloads_path):
+            return None
+        
+        # 获取最近30分钟内的合同文件
+        current_time = time.time()
+        recent_contracts = []
+        
+        # 清理超过24小时的已处理文件记录
+        files_to_remove = []
+        for file_path, process_time in processed_files.items():
+            if current_time - process_time > 86400:  # 24小时 = 86400秒
+                files_to_remove.append(file_path)
+        for file_path in files_to_remove:
+            del processed_files[file_path]
+        
+        for file_path in Path(downloads_path).glob("*.docx"):
+            # 检查文件修改时间（最近30分钟内）
+            file_mtime = file_path.stat().st_mtime
+            if current_time - file_mtime <= 1800:  # 30分钟 = 1800秒
+                # 检查文件名是否包含合同相关关键词
+                filename = file_path.name
+                if any(keyword in filename for keyword in ['合同', '续费', '帆软', '简道云']):
+                    # 检查是否已经处理过这个文件
+                    file_path_str = str(file_path)
+                    if file_path_str in processed_files:
+                        continue  # 跳过已处理的文件
+                    
+                    # 尝试从文件名中提取简道云账号
+                    jdy_account = extract_jdy_account_from_filename(filename)
+                    recent_contracts.append({
+                        'filename': filename,
+                        'path': file_path_str,
+                        'mtime': file_mtime,
+                        'jdy_account': jdy_account
+                    })
+        
+        # 自动推进找到简道云账号的合同到"合同"阶段
+        updated_contracts = []
+        for contract in recent_contracts:
+            # 处理完成后立即记录文件，避免重复处理
+            processed_files[contract['path']] = current_time
+            
+            if contract['jdy_account']:
+                try:
+                    # 调用更新阶段的逻辑
+                    result = update_customer_stage(contract['jdy_account'], '合同')
+                    if result['success']:
+                        updated_contracts.append({
+                            'filename': contract['filename'],
+                            'jdy_account': contract['jdy_account'],
+                            'status': 'updated'
+                        })
+                        logger.info(f"自动推进合同成功: {contract['jdy_account']} -> 合同阶段")
+                    else:
+                        updated_contracts.append({
+                            'filename': contract['filename'],
+                            'jdy_account': contract['jdy_account'],
+                            'status': 'failed',
+                            'error': result.get('error', '未知错误')
+                        })
+                except Exception as e:
+                    logger.error(f"自动推进合同失败: {str(e)}")
+                    updated_contracts.append({
+                        'filename': contract['filename'],
+                        'jdy_account': contract['jdy_account'],
+                        'status': 'error',
+                        'error': str(e)
+                    })
+            else:
+                # 没有找到简道云账号的文件也记录，避免重复扫描
+                logger.debug(f"文件 {contract['filename']} 未找到简道云账号，已记录跳过")
+        
+        return {
+            'downloads_path': downloads_path,
+            'recent_contracts': recent_contracts,
+            'updated_contracts': updated_contracts,
+            'total_found': len(recent_contracts),
+            'total_updated': len([c for c in updated_contracts if c['status'] == 'updated']),
+            'last_check': datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"监控检查失败: {str(e)}")
+        return None
+
+@app.route('/start_auto_monitor', methods=['POST'])
+@login_required
+def start_auto_monitor():
+    """启动自动监控功能"""
+    global auto_monitor_enabled, monitor_thread
+    
+    try:
+        with monitor_lock:
+            if auto_monitor_enabled:
+                return jsonify({
+                    'success': False,
+                    'error': '自动监控已在运行中'
+                }), 400
+            
+            # 启动后台监控
+            auto_monitor_enabled = True
+            monitor_thread = threading.Thread(target=background_monitor_worker, daemon=True)
+            monitor_thread.start()
+            
+            logger.info("后台自动监控已启动")
+            
+            return jsonify({
+                'success': True,
+                'message': '后台自动监控已启动',
+                'status': 'running'
+            })
+        
+    except Exception as e:
+        logger.error(f"启动自动监控失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'启动监控失败: {str(e)}'
+        }), 500
+
+@app.route('/stop_auto_monitor', methods=['POST'])
+@login_required
+def stop_auto_monitor():
+    """停止自动监控功能"""
+    global auto_monitor_enabled, monitor_thread, processed_files
+    
+    try:
+        with monitor_lock:
+            if not auto_monitor_enabled:
+                return jsonify({
+                    'success': False,
+                    'error': '自动监控未在运行'
+                }), 400
+            
+            # 停止后台监控
+            auto_monitor_enabled = False
+            
+            # 等待线程结束
+            if monitor_thread and monitor_thread.is_alive():
+                monitor_thread.join(timeout=5)
+            
+            monitor_thread = None
+            
+            # 清理已处理文件记录
+            processed_files.clear()
+            
+            logger.info("后台自动监控已停止，已清理处理记录")
+            
+            return jsonify({
+                'success': True,
+                'message': '后台自动监控已停止',
+                'status': 'stopped'
+            })
+        
+    except Exception as e:
+        logger.error(f"停止自动监控失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'停止监控失败: {str(e)}'
+        }), 500
+
+@app.route('/get_monitor_status', methods=['GET'])
+@login_required
+def get_monitor_status():
+    """获取监控状态和结果"""
+    global auto_monitor_enabled, monitor_results, last_monitor_check
+    
+    try:
+        with monitor_lock:
+            return jsonify({
+                'success': True,
+                'enabled': auto_monitor_enabled,
+                'last_check': last_monitor_check.isoformat() if last_monitor_check else None,
+                'results': monitor_results
+            })
+        
+    except Exception as e:
+        logger.error(f"获取监控状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'获取状态失败: {str(e)}'
+        }), 500
+
+def auto_start_monitor():
+    """应用启动时自动启动监控功能"""
+    global auto_monitor_enabled, monitor_thread
+    
+    try:
+        with monitor_lock:
+            if not auto_monitor_enabled:
+                # 启动后台监控
+                auto_monitor_enabled = True
+                monitor_thread = threading.Thread(target=background_monitor_worker, daemon=True)
+                monitor_thread.start()
+                logger.info("应用启动时自动启动后台监控成功")
+            else:
+                logger.info("后台监控已在运行中")
+    except Exception as e:
+        logger.error(f"自动启动监控失败: {str(e)}")
+
+if __name__ == '__main__':
+    # 环境配置
+    port = int(os.environ.get('PORT', 8080))
+    # 生产环境使用0.0.0.0，开发环境使用localhost
+    if os.environ.get('FLASK_ENV') == 'production':
+        host = '0.0.0.0'
+    else:
+        host = os.environ.get('HOST', 'localhost')
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    
+    # 应用启动时自动启动监控
+    auto_start_monitor()
+
+    app.run(debug=debug, port=port, host=host)
