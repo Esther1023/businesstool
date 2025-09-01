@@ -1,51 +1,7 @@
-// 获取即将过期的客户信息并显示提示框
+// 提醒看板已被移除
 function fetchExpiringCustomers() {
-    fetch('/get_expiring_customers', {
-        credentials: 'same-origin'  // 确保发送session cookie
-    })
-        .then(response => {
-            if (response.status === 302 || response.url.includes('/login')) {
-                // 被重定向到登录页面，说明未登录
-                console.log('用户未登录，跳过获取客户信息');
-                return null;
-            }
-            // 检查响应是否为JSON格式
-            const contentType = response.headers.get('content-type');
-            if (!response.ok || !contentType || !contentType.includes('application/json')) {
-                // 如果不是JSON响应（比如404 HTML页面），直接显示友好提示
-                throw new Error('API服务不可用');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data) {
-                // 未登录，不显示任何提示
-                return;
-            }
-            
-            const todayDate = data.today_date || new Date().toLocaleDateString('zh-CN');
-            const reminderType = data.reminder_type || '';
-            
-            if (data.message) {
-                // 如果有消息（比如周末提示或没有到期客户），显示消息
-                showExpiringCustomersAlert([], data.message, todayDate, reminderType);
-            } else if (data.expiring_customers && data.expiring_customers.length > 0) {
-                // 有到期客户，显示列表
-                showExpiringCustomersAlert(data.expiring_customers, null, todayDate, reminderType);
-            } else if (data.error) {
-                // 有错误但不显示技术错误，只显示友好提示
-                showExpiringCustomersAlert([], '暂时无法获取客户信息', todayDate, reminderType);
-            } else {
-                // 默认情况：没有到期客户
-                showExpiringCustomersAlert([], '😊 近期没有客户到期', todayDate, reminderType);
-            }
-        })
-        .catch(error => {
-            console.error('获取即将过期客户错误:', error);
-            // 连接失败时显示友好提示
-            const todayDate = new Date().toLocaleDateString('zh-CN');
-            showExpiringCustomersAlert([], '无法连接到服务器，请检查网络连接', todayDate, '连接失败');
-        });
+    // 此函数已被简化，不再显示提醒看板
+    console.log('提醒看板功能已被移除');
 }
 
 // 快捷按钮链接配置
@@ -92,95 +48,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-function showExpiringCustomersAlert(customers, message = null, todayDate = '', reminderType = '') {
-    // 如果已经存在提示框，先移除
-    const existingAlert = document.getElementById('expiring-customers-alert');
-    if (existingAlert) {
-        existingAlert.remove();
-    }
-
-    // 创建提示框（使用原来的CSS类名和样式）
-    const alertDiv = document.createElement('div');
-    alertDiv.id = 'expiring-customers-alert';
-    alertDiv.className = 'expiring-customers-alert';
-
-    // 创建头部（保持原来的结构）
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'expiring-customers-header';
-    headerDiv.style.display = 'flex';
-    headerDiv.style.justifyContent = 'space-between';
-    headerDiv.style.alignItems = 'center';
-    headerDiv.style.padding = '12px 15px';
-    headerDiv.style.backgroundColor = 'var(--secondary-color)';
-    headerDiv.style.borderRadius = '8px 8px 0 0';
-    headerDiv.style.borderBottom = '1px solid var(--border-color)';
-
-    const titleDiv = document.createElement('h4');
-    titleDiv.style.margin = '0';
-    titleDiv.style.color = 'var(--text-color)';  // 改为黑色，与备忘录标题一致
-    titleDiv.style.fontSize = '14px';
-    titleDiv.style.fontWeight = '600';
-    titleDiv.textContent = `📅 ${todayDate} - 提醒看板`;  // 简化标题内容
-
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'close-btn';
-    closeBtn.textContent = '×';
-    closeBtn.onclick = function() {
-        alertDiv.remove();
-    };
-
-    headerDiv.appendChild(titleDiv);
-    headerDiv.appendChild(closeBtn);
-
-    // 创建内容区域（保持原来的结构）
-    const bodyDiv = document.createElement('div');
-    bodyDiv.className = 'expiring-customers-body';
-
-    if (message) {
-        // 显示消息（周末提示或没有到期客户）
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'expiring-customer-item';
-        messageDiv.innerHTML = `
-            <div style="display: flex; align-items: center; padding: 8px 0;">
-                <span style="margin-right: 8px;">ℹ️</span>
-                <span style="color: var(--text-color); font-size: 14px;">${message}</span>
-            </div>
-        `;
-        bodyDiv.appendChild(messageDiv);
-    } else if (customers && customers.length > 0) {
-        // 显示到期客户列表
-        customers.forEach(customer => {
-            const customerDiv = document.createElement('div');
-            customerDiv.className = 'expiring-customer-item';
-            customerDiv.innerHTML = `
-                <div class="expiring-customer-date">${customer.expiry_date}</div>
-                <div style="font-size: 13px; color: var(--text-color); line-height: 1.4;">
-                    <div>公司：${customer.company_name}</div>
-                    <div>账号：${customer.jdy_account}</div>
-                    <div>销售：${customer.sales_person}</div>
-                </div>
-            `;
-            bodyDiv.appendChild(customerDiv);
-        });
-    } else {
-        // 默认情况：没有到期客户
-        const noCustomerDiv = document.createElement('div');
-        noCustomerDiv.className = 'expiring-customer-item';
-        noCustomerDiv.innerHTML = `
-            <div style="display: flex; align-items: center; padding: 8px 0;">
-                <span style="margin-right: 8px;">😊</span>
-                <span style="color: var(--text-color); font-size: 14px;">近期没有客户到期</span>
-            </div>
-        `;
-        bodyDiv.appendChild(noCustomerDiv);
-    }
-
-    // 组装提示框
-    alertDiv.appendChild(headerDiv);
-    alertDiv.appendChild(bodyDiv);
-    document.body.appendChild(alertDiv);
-
-    // 看板一直存在，不自动关闭
+// 提醒看板已被移除，此函数不再使用
+function showExpiringCustomersAlert() {
+    console.log('提醒看板功能已被移除');
 }
 
 // 创建备忘录白板（替代原来的25-30天到期客户看板）
@@ -194,6 +64,8 @@ function showFutureExpiringCustomersDashboard(estherCustomers, otherCustomers) {
     // 创建看板容器（保持原来的类名以维持样式）
     const dashboardContainer = document.createElement('div');
     dashboardContainer.className = 'future-expiring-dashboard';
+    dashboardContainer.style.width = '335px';
+    dashboardContainer.style.maxHeight = '600px'; // 增加高度，使其占据更多空间
 
     // 创建看板标题
     const dashboardHeader = document.createElement('div');
@@ -218,10 +90,11 @@ function showFutureExpiringCustomersDashboard(estherCustomers, otherCustomers) {
     // 创建备忘录内容区域（使用原来的dashboard-body类名）
     const dashboardBody = document.createElement('div');
     dashboardBody.className = 'dashboard-body';
+    dashboardBody.style.height = '540px'; // 增加内容区域高度
 
     const memoTextarea = document.createElement('textarea');
     memoTextarea.className = 'memo-textarea';
-    memoTextarea.placeholder = '在这里记录您的备忘事项...\n\n• 待办事项\n• 重要提醒\n• 工作笔记\n• 客户跟进';
+    memoTextarea.placeholder = '在这里记录您的备忘事项...\n\n• 待办事项\n• 重要提醒\n• 工作笔记\n• 客户跟进\n• 项目计划';
     memoTextarea.style.width = '100%';
     memoTextarea.style.height = '100%';
     memoTextarea.style.border = 'none';
@@ -800,7 +673,199 @@ function queryCustomer() {
     });
 }
 
-// ===== 悬浮球功能 =====
+// 创建智能计算器
+function createSmartCalculator() {
+    // 检查是否已存在计算器，如果存在则移除
+    const existingCalculator = document.getElementById('smart-calculator');
+    if (existingCalculator) {
+        existingCalculator.remove();
+    }
+
+    // 创建计算器容器
+    const calculatorContainer = document.createElement('div');
+    calculatorContainer.id = 'smart-calculator';
+    calculatorContainer.className = 'smart-calculator';
+
+    // 创建计算器头部
+    const calculatorHeader = document.createElement('div');
+    calculatorHeader.className = 'calculator-header';
+    calculatorHeader.textContent = '智能计算器';
+
+    // 创建计算器显示区域
+    const calculatorDisplay = document.createElement('div');
+    calculatorDisplay.className = 'calculator-display';
+
+    const displayInput = document.createElement('input');
+    displayInput.type = 'text';
+    displayInput.readOnly = true;
+    displayInput.className = 'calculator-input';
+    displayInput.value = '0';
+
+    calculatorDisplay.appendChild(displayInput);
+
+    // 创建计算器按钮区域
+    const calculatorButtons = document.createElement('div');
+    calculatorButtons.className = 'calculator-buttons';
+
+    // 定义计算器按钮
+    const buttons = [
+        ['7', '8', '9', '÷'],
+        ['4', '5', '6', '×'],
+        ['1', '2', '3', '-'],
+        ['0', '.', '=', '+'],
+        ['AC', 'C']
+    ];
+
+    // 创建按钮
+    buttons.forEach(row => {
+        const buttonRow = document.createElement('div');
+        buttonRow.className = 'calculator-row';
+        
+        row.forEach(buttonText => {
+            const button = document.createElement('button');
+            button.className = 'calculator-button';
+            button.textContent = buttonText;
+            
+            // 根据按钮类型添加不同的样式
+            if (['÷', '×', '-', '+'].includes(buttonText)) {
+                button.classList.add('operator-button');
+            } else if (buttonText === '=') {
+                button.classList.add('equals-button');
+            } else if (['AC', 'C'].includes(buttonText)) {
+                button.classList.add('clear-button');
+            }
+            
+            buttonRow.appendChild(button);
+        });
+        
+        calculatorButtons.appendChild(buttonRow);
+    });
+
+    // 组装计算器
+    calculatorContainer.appendChild(calculatorHeader);
+    calculatorContainer.appendChild(calculatorDisplay);
+    calculatorContainer.appendChild(calculatorButtons);
+    document.body.appendChild(calculatorContainer);
+
+    // 添加计算器事件处理
+    const calculatorButtonElements = calculatorContainer.querySelectorAll('.calculator-button');
+    const display = displayInput;
+    let firstOperand = '';
+    let operator = '';
+    let waitingForSecondOperand = false;
+
+    calculatorButtonElements.forEach(button => {
+        button.addEventListener('click', function() {
+            const value = this.textContent;
+            handleButtonClick(value);
+        });
+    });
+
+    // 添加回车键执行等于操作
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleButtonClick('=');
+        } else if ('0123456789.'.includes(e.key)) {
+            handleButtonClick(e.key);
+        } else if (['+', '-', '*', '/'].includes(e.key)) {
+            handleButtonClick(e.key.replace('*', '×').replace('/', '÷'));
+        } else if (e.key.toLowerCase() === 'c') {
+            handleButtonClick('C');
+        } else if (e.key.toLowerCase() === 'escape') {
+            handleButtonClick('AC');
+        } else if (e.key === 'Backspace') {
+            // Backspace键实现删除单个字符的功能
+            display.value = display.value.slice(0, -1) || '0';
+        } else if (e.key === ' ') {
+            // 空格键实现乘法操作
+            handleButtonClick('×');
+        }
+    });
+
+    function handleButtonClick(value) {
+        if (/\d/.test(value)) {
+            // 数字按钮
+            if (waitingForSecondOperand) {
+                display.value = value;
+                waitingForSecondOperand = false;
+            } else {
+                display.value = display.value === '0' ? value : display.value + value;
+            }
+            return;
+        }
+
+        if (value === '.') {
+            // 小数点按钮
+            if (waitingForSecondOperand) {
+                display.value = '0.';
+                waitingForSecondOperand = false;
+                return;
+            }
+            if (display.value.indexOf('.') === -1) {
+                display.value += '.';
+            }
+            return;
+        }
+
+        if (['+', '-', '×', '÷'].includes(value)) {
+            // 操作符按钮
+            performCalculation();
+            operator = value;
+            firstOperand = display.value;
+            waitingForSecondOperand = true;
+            return;
+        }
+
+        if (value === '=') {
+            // 等于按钮
+            performCalculation();
+            operator = '';
+            firstOperand = '';
+            waitingForSecondOperand = false;
+            return;
+        }
+
+        if (value === 'C') {
+            // 清空输入（根据用户需求修改）
+            display.value = '0';
+            return;
+        }
+
+        if (value === 'AC') {
+            // 全部清除
+            display.value = '0';
+            firstOperand = '';
+            operator = '';
+            waitingForSecondOperand = false;
+            return;
+        }
+    }
+
+    function performCalculation() {
+        if (operator && firstOperand !== '') {
+            const secondOperand = display.value;
+            let result;
+            
+            try {
+                // 将操作符转换为JavaScript操作符
+                const op = operator === '×' ? '*' : operator === '÷' ? '/' : operator;
+                result = eval(`${firstOperand} ${op} ${secondOperand}`);
+                
+                // 格式化结果
+                if (Number.isInteger(result)) {
+                    display.value = result.toString();
+                } else {
+                    display.value = result.toFixed(10).replace(/\.?0+$/, '');
+                }
+            } catch (error) {
+                display.value = '错误';
+            }
+        }
+    }
+}
+
+// 悬浮球功能 =====
 document.addEventListener('DOMContentLoaded', function() {
     const assistBall = document.getElementById('assistBall');
     const assistPanel = document.getElementById('assistPanel');
@@ -844,12 +909,28 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // 推进阶段按钮事件
+    document.getElementById('btnStageContract').addEventListener('click', function() {
+        updateStage('合同', assistId.value.trim());
+    });
+    
     document.getElementById('btnStageInvoice').addEventListener('click', function() {
         updateStage('开票', assistId.value.trim());
     });
     
     document.getElementById('btnStageAdvanceInvoice').addEventListener('click', function() {
         updateStage('提前开', assistId.value.trim());
+    });
+    
+    document.getElementById('btnStageInvalid').addEventListener('click', function() {
+        updateStage('无效', assistId.value.trim());
+    });
+    
+    document.getElementById('btnStageUpsell').addEventListener('click', function() {
+        updateStage('增购', assistId.value.trim());
+    });
+    
+    document.getElementById('btnStageLost').addEventListener('click', function() {
+        updateStage('失联', assistId.value.trim());
     });
     
     document.getElementById('btnStagePaid').addEventListener('click', function() {
@@ -886,6 +967,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 初始化监控状态
     initializeMonitorStatus();
+    
+    // 创建智能计算器
+    createSmartCalculator();
     
     // 面板打开时自动识别账号
     function onPanelOpen() {
@@ -1137,25 +1221,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function getFilterLabel(filter) {
-        const labels = {
-            'all': '全部状态',
-            'na': 'NA状态',
-            'contract': '合同状态',
-            'invoice': '开票状态',
-            'advance_invoice': '提前开状态',
-            'paid': '回款状态'
-        };
-        return labels[filter] || filter;
-    }
+    const labels = {
+        'all': '全部状态',
+        'na': 'NA状态',
+        'contract': '合同状态',
+        'invoice': '开票状态',
+        'advance_invoice': '提前开状态',
+        'paid': '回款状态',
+        'invalid': '无效',
+        'upsell': '增购',
+        'lost': '失联'
+    };
+    return labels[filter] || filter;
+}
     
     function getStageClass(stage) {
-        if (stage === 'NA') return 'stage-na';
-        if (stage.includes('合同')) return 'stage-contract';
-        if (stage.includes('开票')) return 'stage-invoice';
-        if (stage.includes('提前开')) return 'stage-advance-invoice';
-        if (stage.includes('回款') || stage.includes('已付')) return 'stage-paid';
-        return 'stage-other';
-    }
+    if (stage === 'NA') return 'stage-na';
+    if (stage.includes('合同')) return 'stage-contract';
+    if (stage.includes('开票')) return 'stage-invoice';
+    if (stage.includes('提前开')) return 'stage-advance-invoice';
+    if (stage.includes('回款') || stage.includes('已付')) return 'stage-paid';
+    if (stage.includes('无效')) return 'stage-invalid';
+    if (stage.includes('增购')) return 'stage-upsell';
+    if (stage.includes('失联')) return 'stage-lost';
+    return 'stage-other';
+}
     
     // 自动监控功能
     let statusCheckInterval = null;
