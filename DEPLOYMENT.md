@@ -167,6 +167,7 @@ echo "     time_namelookup:  %{time_namelookup}\n
 1. 检查requirements.txt中的依赖版本
 2. 确认Procfile配置正确
 3. 查看平台的构建日志
+4. 如果出现"Package libgl1-mesa-glx is not available"错误，请将Dockerfile和aptfile中的libgl1-mesa-glx替换为libgl1
 
 ### 问题4：中文字符显示异常
 **症状**：OCR识别的中文显示乱码
