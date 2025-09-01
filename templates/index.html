@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esther的工作助理</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Esther的工作助理</h1>
+        </div>
+
+        <div class="card">
+            <form id="contractForm" enctype="multipart/form-data" method="post" action="/generate">
+                <div class="form-group">
+                    <label for="fileInput">快速选择模板</label>
+                    <div class="template-buttons">
+                        <button type="button" class="btn btn-template" data-template="标准版合同模板_带变量.docx">标准版</button>
+                        <button type="button" class="btn btn-template" data-template="企业版合同模板_带变量.docx">企业版</button>
+                        <button type="button" class="btn btn-template" data-template="定制版合同模板_带变量.docx">定制版</button>
+                        <button type="button" class="btn btn-template" data-template="青春版合同模板_带变量.docx">青春版</button>
+                        <button type="button" class="btn btn-template" data-template="专业版合同模板_带变量.docx">专业版</button>
+                    </div>
+                </div>
+                <input type="file" name="template" accept=".docx" required class="file-input" id="fileInput"
+                    style="display: none;">
+                <div class="file-info" id="fileInfo" style="display: none;"></div>
+
+                <!-- 甲方基本信息 section -->
+                <div class="form-section">
+                    <h3>甲方基本信息</h3>
+                    <div class="variables-form">
+                        <div class="form-group full-width">
+                            <div class="smart-fill-container">
+                                <!-- 左侧：OCR识别区域 -->
+                                <div class="ocr-section">
+                                    <div class="image-upload-container">
+                                        <div class="image-upload-area" id="imageUploadArea">
+                                            <div class="upload-content">
+                                                <div class="upload-icon">📷</div>
+                                                <div class="upload-text">
+                                                    <p>拖拽图片到此处或点击上传</p>
+                                                    <p class="upload-hint">支持 PNG、JPG、JPEG 等格式</p>
+                                                    <p class="upload-hint">也可以直接粘贴截图（Ctrl+V）</p>
+                                                    <p class="upload-hint">上传后自动识别并填充表单</p>
+                                                </div>
+                                            </div>
+                                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+                                        </div>
+                                        <div class="image-preview" id="imagePreview" style="display: none;">
+                                            <img id="previewImage" src="" alt="预览图片">
+                                            <div class="preview-actions">
+                                                <button type="button" class="btn btn-secondary" id="clearImageBtn">清除图片</button>
+                                            </div>
+                                        </div>
+                                        <div class="ocr-progress" id="ocrProgress" style="display: none;">
+                                            <div class="progress-bar">
+                                                <div class="progress-fill"></div>
+                                            </div>
+                                            <p class="progress-text">正在识别图片中的文字并自动填充...</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 右侧：粘贴板自动填充区域 -->
+                                <div class="clipboard-section">
+                                    <div class="clipboard-container">
+                                        <div class="clipboard-area" id="clipboardArea">
+                                            <div class="clipboard-content">
+                                                <div class="clipboard-icon">📋</div>
+                                                <div class="clipboard-text">
+                                                    <p>智能粘贴识别</p>
+                                                    <p class="clipboard-hint">在页面任意位置粘贴文本</p>
+                                                    <p class="clipboard-hint">系统将自动解析并填充表单</p>
+                                                </div>
+                                            </div>
+                                            <textarea id="clipboardTextarea" placeholder="在此粘贴文本内容，系统将自动识别并填充相关字段..." rows="8"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="company_name">公司名称（必填）</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="company_name" id="company_name" required
+                                    oninput="debounceQueryByCompanyName(event)" placeholder="输入2个字符以上开始搜索">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="tax_number">税号（必填）</label>
+                            <input type="text" class="form-control" name="tax_number" id="tax_number" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="reg_address">注册地址</label>
+                            <input type="text" class="form-control" name="reg_address" id="reg_address">
+                        </div>
+                        <div class="form-group">
+                            <label for="reg_phone">注册电话</label>
+                            <input type="text" class="form-control" name="reg_phone" id="reg_phone">
+                        </div>
+                        <div class="form-group">
+                            <label for="bank_name">开户行</label>
+                            <input type="text" class="form-control" name="bank_name" id="bank_name">
+                        </div>
+                        <div class="form-group">
+                            <label for="bank_account">账号</label>
+                            <input type="text" class="form-control" name="bank_account" id="bank_account">
+                        </div>
+                        <div class="form-group">
+                            <label for="jdy_account">简道云账号（必填）</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" name="jdy_account" id="jdy_account" required
+                                    oninput="debounceQueryCustomer(event)" placeholder="输入ID显示全部信息">
+                                <input type="file" id="excelUpload" accept=".xlsx" style="display: none;">
+                                <button type="button" class="btn btn-excel"
+                                    onclick="document.getElementById('excelUpload').click()">导入Excel</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-hetiao-inline">业绩进度</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-sa-inline">SA后台</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-huikuan-inline">查查回款</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-xiadan-inline">记得接口</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-qiwei-inline">KMS</button>
+                                <button type="button" class="btn btn-shortcut" id="btn-daike-inline">客户归属</button>
+                                <span id="lastImportTime" class="last-import-time"></span>
+                            </div>
+                        </div>
+                        <div id="customerInfo" class="form-group full-width" style="display: none;">
+                            <div class="customer-info-box">
+                                <div class="info-row">
+                                    <label>账号-企业名称：</label>
+                                    <span id="accountEnterpriseName"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>集成模式：</label>
+                                    <span id="integrationMode"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>到期日期：</label>
+                                    <span id="expiryDate"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>应续ARR：</label>
+                                    <span id="uidArr"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>客户分类：</label>
+                                    <span id="customerClassification"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>续费责任销售：</label>
+                                    <span id="salesPerson"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>责任销售中英文：</label>
+                                    <span id="salesCnEn"></span>
+                                </div>
+                                <div class="info-row">
+                                    <label>简道云销售：</label>
+                                    <span id="jdySales"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 服务期限与费用信息 section -->
+                <div class="form-section">
+                    <h3>服务期限与费用信息</h3>
+                    <div class="variables-form">
+                        <!-- 服务期限子区域 -->
+                        <div class="form-subsection">
+                            <div class="subsection-fields">
+                                <div class="form-group service-duration-group">
+                                    <label>服务期限（必填）</label>
+                                    <div class="duration-inputs">
+                                        <div class="duration-input-item">
+                                            <label for="serviceYears">年份</label>
+                                            <input type="number" class="form-control" name="service_years" required min="0"
+                                                id="serviceYears" placeholder="0">
+                                        </div>
+                                        <div class="duration-input-item">
+                                            <label for="serviceMonths">额外月份</label>
+                                            <input type="number" class="form-control" name="service_months" min="0" max="23"
+                                                id="serviceMonths" placeholder="0">
+                                        </div>
+                                    </div>
+                                    <div class="duration-summary" id="durationSummary">
+                                        总计：0年0个月
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="startYear">开始年份（必填）</label>
+                                    <input type="number" class="form-control" name="start_year" required id="startYear">
+                                </div>
+                                <div class="form-group">
+                                    <label for="startMonth">开始月份（必填）</label>
+                                    <input type="number" class="form-control" name="start_month" min="1" max="12" required
+                                        id="startMonth">
+                                </div>
+                                <div class="form-group">
+                                    <label for="startDay">开始日期（必填）</label>
+                                    <input type="number" class="form-control" name="start_day" min="1" max="31" required
+                                        id="startDay">
+                                </div>
+                                <div class="form-group">
+                                    <label for="endYear">结束年份（自动计算）</label>
+                                    <input type="number" class="form-control" name="end_year" required readonly id="endYear">
+                                </div>
+                                <div class="form-group">
+                                    <label for="endMonth">结束月份（自动计算）</label>
+                                    <input type="number" class="form-control" name="end_month" min="1" max="12" required
+                                        readonly id="endMonth">
+                                </div>
+                                <div class="form-group">
+                                    <label for="endDay">结束日期（自动计算）</label>
+                                    <input type="number" class="form-control" name="end_day" min="1" max="31" required readonly
+                                        id="endDay">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 费用信息子区域 -->
+                        <div class="form-subsection">
+                            <div class="subsection-fields">
+                                <div class="form-group">
+                                    <label for="totalAmount">服务费用金额（数字）</label>
+                                    <input type="number" class="form-control" name="total_amount" required id="totalAmount"
+                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?"
+                                        oninput="calculateUnitPrice()">
+                                </div>
+                                <div class="form-group">
+                                    <label for="user_count">使用人数</label>
+                                    <input type="number" class="form-control" name="user_count" id="user_count" required min="1"
+                                        step="1" pattern="[0-9]+" oninput="calculateUnitPrice()">
+                                </div>
+                                <div class="form-group">
+                                    <label for="unitPrice">单价（元/人/年）</label>
+                                    <input type="number" class="form-control" name="unit_price" required id="unitPrice"
+                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?"
+                                        oninput="calculateTotalAmount()">
+                                </div>
+                                <div class="form-group full-width">
+                                    <label for="totalAmountCn">服务费用金额（大写，自动生成）</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" name="total_amount_cn" required readonly
+                                            id="totalAmountCn">
+                                        <button type="button" class="btn btn-secondary" onclick="fillTestData()">填充测试数据</button>
+                                        <button type="submit" class="btn btn-generate">生成合同</button>
+                                    </div>
+                                </div>
+                                <input type="hidden" name="payment_amount" id="paymentAmount">
+                                <input type="hidden" name="payment_amount_cn" id="paymentAmountCn">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+    <script>
+        // 填充测试数据
+        function fillTestData() {
+            // 填充甲方基本信息
+            document.querySelector('[name="company_name"]').value = '测试科技有限公司';
+            document.querySelector('[name="tax_number"]').value = '91330000123456789X';
+            document.querySelector('[name="reg_address"]').value = '浙江省杭州市西湖区测试路88号';
+            document.querySelector('[name="reg_phone"]').value = '0571-88888888';
+            document.querySelector('[name="bank_name"]').value = '中国测试银行杭州分行';
+            document.querySelector('[name="bank_account"]').value = '1234567890123456789';
+            document.querySelector('[name="jdy_account"]').value = '12345678abcdefghijklmnop';
+
+            // 填充服务期限
+            document.getElementById('serviceYears').value = '2';
+            document.getElementById('serviceMonths').value = '6';
+            document.getElementById('startYear').value = '2025';
+            document.getElementById('startMonth').value = '3';
+            document.getElementById('startDay').value = '6';
+
+            // 触发自动计算
+            processDurationInput();
+
+            // 填充费用信息
+            document.getElementById('totalAmount').value = '125680.50';
+            document.querySelector('[name="user_count"]').value = '50';
+            // 触发自动计算单价
+            calculateUnitPrice();
+
+
+        }
+
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+
+        // 数字转中文大写
+        function numberToChinese(num) {
+            if (num === 0) {
+                return '零元整';
+            }
+
+            const chineseNums = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
+            const units = ['', '拾', '佰', '仟'];
+            const bigUnits = ['', '万', '亿'];
+
+            num = Math.floor(num);
+            let strArr = [];
+            let current = num;
+            let level = 0;
+
+            while (current > 0) {
+                let section = current % 10000;
+                let sectionStr = '';
+                let hasValue = false;
+                let lastHasValue = false;
+
+                for (let i = 0; i < 4; i++) {
+                    const digit = section % 10;
+
+                    if (digit === 0) {
+                        if (lastHasValue && section > 0) {
+                            sectionStr = '零' + sectionStr;
+                        }
+                        lastHasValue = false;
+                    } else {
+                        sectionStr = chineseNums[digit] + units[i] + sectionStr;
+                        hasValue = true;
+                        lastHasValue = true;
+                    }
+
+                    section = Math.floor(section / 10);
+                }
+
+                if (hasValue) {
+                    sectionStr = sectionStr + bigUnits[level] + (strArr.length > 0 ? '零' : '');
+                }
+
+                if (sectionStr) {
+                    strArr.unshift(sectionStr.replace(/零+$/, '').replace(/零+/g, '零'));
+                }
+
+                current = Math.floor(current / 10000);
+                level++;
+            }
+
+            let result = strArr.join('').replace(/零+$/, '');
+            return result + '元整';
+        }
+
+        // 更新中文金额
+        function updateChineseAmount(value) {
+            const num = parseFloat(value) || 0;
+            document.getElementById('totalAmountCn').value = numberToChinese(num);
+            document.getElementById('paymentAmount').value = num;
+            document.getElementById('paymentAmountCn').value = numberToChinese(num);
+        }
+
+        // 精确的数值四舍五入函数
+        function roundToTwo(num) {
+            return Math.round((num + Number.EPSILON) * 100) / 100;
+        }
+
+        // 计算单价
+        function calculateUnitPrice() {
+            const totalAmount = parseFloat(document.getElementById('totalAmount').value) || 0;
+            const userCount = parseFloat(document.querySelector('[name="user_count"]').value) || 0;
+            const serviceYears = getTotalServiceYears();
+
+            if (totalAmount && userCount && serviceYears > 0) {
+                const unitPrice = totalAmount / (userCount * serviceYears);
+                const roundedUnitPrice = roundToTwo(unitPrice);
+                document.getElementById('unitPrice').value = roundedUnitPrice.toFixed(2);
+                updateChineseAmount(totalAmount);
+            }
+        }
+
+        // 根据单价计算总金额
+        function calculateTotalAmount() {
+            const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
+            const userCount = parseFloat(document.querySelector('[name="user_count"]').value) || 0;
+            const serviceYears = getTotalServiceYears();
+
+            if (unitPrice && userCount && serviceYears > 0) {
+                const totalAmount = unitPrice * userCount * serviceYears;
+                const roundedTotalAmount = roundToTwo(totalAmount);
+                document.getElementById('totalAmount').value = roundedTotalAmount.toFixed(2);
+                updateChineseAmount(roundedTotalAmount);
+            }
+        }
+
+        // 处理年月输入并自动转换
+        function processDurationInput() {
+            const yearsInput = document.getElementById('serviceYears');
+            const monthsInput = document.getElementById('serviceMonths');
+            const summaryDiv = document.getElementById('durationSummary');
+
+            if (!yearsInput || !monthsInput || !summaryDiv) {
+                return;
+            }
+
+            let years = parseInt(yearsInput.value) || 0;
+            let months = parseInt(monthsInput.value) || 0;
+
+            // 如果月份≥12，自动转换为年份
+            if (months >= 12) {
+                const additionalYears = Math.floor(months / 12);
+                years += additionalYears;
+                months = months % 12;
+
+                // 更新输入框显示
+                yearsInput.value = years;
+                monthsInput.value = months;
+            }
+
+            // 更新总计显示
+            summaryDiv.textContent = `总计：${years}年${months}个月`;
+
+            // 计算结束日期
+            calculateEndDate();
+
+            // 重新计算费用
+            if (document.getElementById('unitPrice').value) {
+                calculateTotalAmount();
+            } else {
+                calculateUnitPrice();
+            }
+        }
+
+        // 获取总服务期限（以年为单位，包含月份的小数部分）
+        function getTotalServiceYears() {
+            const years = parseInt(document.getElementById('serviceYears').value) || 0;
+            const months = parseInt(document.getElementById('serviceMonths').value) || 0;
+            return years + (months / 12);
+        }
+
+        // 自动计算结束日期
+        function calculateEndDate() {
+            const years = parseInt(document.getElementById('serviceYears').value) || 0;
+            const months = parseInt(document.getElementById('serviceMonths').value) || 0;
+            const startYear = parseInt(document.getElementById('startYear').value) || 0;
+            const startMonth = parseInt(document.getElementById('startMonth').value) || 0;
+            const startDay = parseInt(document.getElementById('startDay').value) || 0;
+
+            if ((years > 0 || months > 0) && startYear && startMonth && startDay) {
+                const endYear = document.getElementById('endYear');
+                const endMonth = document.getElementById('endMonth');
+                const endDay = document.getElementById('endDay');
+
+                if (!endYear || !endMonth || !endDay) {
+                    return;
+                }
+
+                // 创建开始日期
+                const startDate = new Date(startYear, startMonth - 1, startDay);
+
+                // 添加年份和月份
+                const endDate = new Date(startDate);
+                endDate.setFullYear(endDate.getFullYear() + years);
+                endDate.setMonth(endDate.getMonth() + months);
+
+                // 结束日期为计算日期的前一天
+                endDate.setDate(endDate.getDate() - 1);
+
+                endYear.value = endDate.getFullYear();
+                endMonth.value = endDate.getMonth() + 1;
+                endDay.value = endDate.getDate();
+            }
+        }
+
+        // 初始化事件监听器
+        function initEventListeners() {
+            // 检查元素是否存在
+            const serviceYears = document.getElementById('serviceYears');
+            const serviceMonths = document.getElementById('serviceMonths');
+            const startYear = document.getElementById('startYear');
+            const startMonth = document.getElementById('startMonth');
+            const startDay = document.getElementById('startDay');
+
+            if (!serviceYears || !serviceMonths || !startYear || !startMonth || !startDay) {
+                return;
+            }
+
+            // 添加服务期限相关字段的事件监听
+            serviceYears.addEventListener('input', processDurationInput);
+            serviceMonths.addEventListener('input', processDurationInput);
+
+            // 添加开始日期字段的事件监听，用于触发结束日期计算
+            startYear.addEventListener('input', calculateEndDate);
+            startMonth.addEventListener('input', calculateEndDate);
+            startDay.addEventListener('input', calculateEndDate);
+
+            // 添加费用相关字段的事件监听
+            const totalAmount = document.getElementById('totalAmount');
+            const userCount = document.querySelector('[name="user_count"]');
+            const unitPrice = document.getElementById('unitPrice');
+
+            if (totalAmount) {
+                totalAmount.addEventListener('input', calculateUnitPrice);
+            }
+            if (userCount) {
+                userCount.addEventListener('input', function () {
+                    if (document.getElementById('unitPrice').value) {
+                        calculateTotalAmount();
+                    } else {
+                        calculateUnitPrice();
+                    }
+                });
+            }
+            if (unitPrice) {
+                unitPrice.addEventListener('input', calculateTotalAmount);
+            }
+        }
+
+        // 智能图片识别功能
+        let currentImageFile = null;
+        let recognizedFields = {};
+
+        // 初始化图片上传功能
+        function initImageUpload() {
+            const uploadArea = document.getElementById('imageUploadArea');
+            const fileInput = document.getElementById('imageFileInput');
+            const imagePreview = document.getElementById('imagePreview');
+            const previewImage = document.getElementById('previewImage');
+            const clearBtn = document.getElementById('clearImageBtn');
+            const ocrProgress = document.getElementById('ocrProgress');
+            const ocrResult = document.getElementById('ocrResult');
+
+            // 点击上传区域触发文件选择
+            uploadArea.addEventListener('click', (e) => {
+                // 确保点击的是上传区域本身，不是其他元素
+                if (e.target === uploadArea || uploadArea.contains(e.target)) {
+                    fileInput.click();
+                }
+            });
+
+            // 文件选择处理
+            fileInput.addEventListener('change', handleFileSelect);
+
+            // 拖拽功能
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('drag-over');
+            });
+
+            uploadArea.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('drag-over');
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+
+            // 全局粘贴功能 - 智能分流处理
+            document.addEventListener('paste', (e) => {
+                // 检查是否在输入框中粘贴
+                const activeElement = document.activeElement;
+                if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+                    return; // 允许在输入框中正常粘贴文本
+                }
+
+                const items = e.clipboardData.items;
+                let hasImage = false;
+                let hasText = false;
+                
+                // 检查粘贴内容类型
+                for (let item of items) {
+                    if (item.type.indexOf('image') !== -1) {
+                        hasImage = true;
+                        break;
+                    }
+                    if (item.type === 'text/plain') {
+                        hasText = true;
+                    }
+                }
+                
+                // 优先处理图片
+                if (hasImage) {
+                    e.preventDefault();
+                    for (let item of items) {
+                        if (item.type.indexOf('image') !== -1) {
+                            const file = item.getAsFile();
+                            if (file) {
+                                handleFile(file);
+                                showPasteSuccess('图片粘贴成功！正在进行OCR识别...');
+                            }
+                            break;
+                        }
+                    }
+                }
+                // 处理文本
+                else if (hasText) {
+                    e.preventDefault();
+                    for (let item of items) {
+                        if (item.type === 'text/plain') {
+                            item.getAsString((text) => {
+                                if (text.trim()) {
+                                    handleClipboardText(text.trim());
+                                    showClipboardSuccess('文本粘贴成功！正在智能解析...');
+                                }
+                            });
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // 清除图片按钮
+            clearBtn.addEventListener('click', clearImage);
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            // 检查文件是否存在
+            if (!file) {
+                alert('未选择文件');
+                return;
+            }
+
+            // 检查文件类型
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/bmp', 'image/webp', 'image/tiff'];
+            if (!allowedTypes.includes(file.type)) {
+                alert(`不支持的文件类型: ${file.type}\n请选择有效的图片文件（PNG、JPG、JPEG、GIF、BMP、WebP、TIFF）`);
+                return;
+            }
+
+            // 检查文件大小（10MB限制）
+            if (file.size > 10 * 1024 * 1024) {
+                alert(`文件大小过大: ${(file.size / 1024 / 1024).toFixed(2)}MB\n请选择小于10MB的文件`);
+                return;
+            }
+
+            currentImageFile = file;
+            showImagePreview(file);
+
+            // 自动开始识别
+            setTimeout(() => {
+                processImage();
+            }, 800);
+        }
+
+        function showImagePreview(file) {
+            const uploadArea = document.getElementById('imageUploadArea');
+            const imagePreview = document.getElementById('imagePreview');
+            const previewImage = document.getElementById('previewImage');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                uploadArea.style.display = 'none';
+                imagePreview.style.display = 'block';
+            };
+            reader.onerror = (e) => {
+                console.error('图片读取失败:', e);
+                alert('图片读取失败，请重试');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function clearImage() {
+            currentImageFile = null;
+            recognizedFields = {};
+
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('ocrProgress').style.display = 'none';
+            document.getElementById('ocrResult').style.display = 'none';
+            document.getElementById('imageFileInput').value = '';
+
+            resetUploadArea();
+        }
+
+        function showPasteSuccess(message = '图片粘贴成功！') {
+            // 创建临时提示
+            const uploadArea = document.getElementById('imageUploadArea');
+            const originalContent = uploadArea.innerHTML;
+
+            uploadArea.innerHTML = `
+                <div class="upload-content">
+                    <div class="upload-icon">✅</div>
+                    <div class="upload-text">
+                        <p>${message}</p>
+                        <p class="upload-hint">正在处理...</p>
+                    </div>
+                </div>
+            `;
+
+            // 2秒后恢复原内容
+            setTimeout(() => {
+                uploadArea.innerHTML = originalContent;
+            }, 2000);
+        }
+
+        // 处理粘贴板文本
+        function handleClipboardText(text) {
+            // 发送到后端解析
+            fetch('/parse_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.fields) {
+                    // 直接应用解析结果到表单
+                    autoFillFields(data.fields);
+                }
+            })
+            .catch(error => {
+                console.error('解析文本错误:', error);
+            });
+        }
+
+        // 显示粘贴板成功提示
+        function showClipboardSuccess(message = '文本粘贴成功！') {
+            const clipboardArea = document.getElementById('clipboardArea');
+            const clipboardContent = clipboardArea?.querySelector('.clipboard-content');
+            
+            if (!clipboardContent) return;
+            
+            const originalContent = clipboardContent.innerHTML;
+
+            clipboardContent.innerHTML = `
+                <div class="clipboard-icon">✅</div>
+                <div class="clipboard-text">
+                    <p>${message}</p>
+                    <p class="clipboard-hint">正在智能解析...</p>
+                </div>
+            `;
+
+            // 2秒后恢复原内容
+            setTimeout(() => {
+                clipboardContent.innerHTML = originalContent;
+            }, 2000);
+        }
+
+        // 自动填充字段到表单
+        function autoFillFields(fields) {
+            for (const [fieldName, value] of Object.entries(fields)) {
+                const input = document.getElementById(fieldName);
+                if (input && value) {
+                    input.value = value;
+                    input.classList.add('auto-filled');
+                    
+                    // 移除高亮效果
+                    setTimeout(() => {
+                        input.classList.remove('auto-filled');
+                    }, 2000);
+                    
+                    // 触发输入事件（用于公司名称搜索等）
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        }
+
+        function processImage() {
+            if (!currentImageFile) {
+                alert('请先选择图片');
+                return;
+            }
+
+            const ocrProgress = document.getElementById('ocrProgress');
+            const ocrResult = document.getElementById('ocrResult');
+
+            // 显示进度条
+            ocrProgress.style.display = 'block';
+            ocrResult.style.display = 'none';
+
+            // 创建FormData
+            const formData = new FormData();
+            formData.append('image', currentImageFile);
+
+            // 发送OCR请求
+            fetch('/ocr_process', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                ocrProgress.style.display = 'none';
+
+                if (data.success) {
+                    recognizedFields = data.parsed_fields;
+                    // 显示简化的成功提示并直接填充
+                    showOCRSuccess(data);
+                } else {
+                    console.error('OCR识别失败:', data.error);
+
+                    // 检查是否是OCR不可用的错误
+                    if (data.ocr_available === false || data.tesseract_available === false) {
+                        showOCRUnavailable(data.error);
+                    } else {
+                        alert('图片识别失败：' + (data.error || '未知错误'));
+                        resetUploadArea();
+                    }
+                }
+            })
+            .catch(error => {
+                ocrProgress.style.display = 'none';
+                console.error('OCR请求失败:', error);
+                alert('网络请求失败：' + error.message + '\n请检查网络连接并重试');
+                resetUploadArea();
+            });
+        }
+
+        function showOCRSuccess(data) {
+            const uploadArea = document.getElementById('imageUploadArea');
+            const imagePreview = document.getElementById('imagePreview');
+            const ocrResult = document.getElementById('ocrResult');
+
+            // 隐藏图片预览
+            imagePreview.style.display = 'none';
+
+            // 应用字段到表单
+            const result = applyFieldsToFormDirectly(data.parsed_fields);
+
+            // 隐藏OCR结果区域（不再需要）
+            ocrResult.style.display = 'none';
+
+            // 直接恢复上传区域，不显示成功提示
+            resetUploadArea();
+        }
+
+        function resetUploadArea() {
+            const uploadArea = document.getElementById('imageUploadArea');
+            uploadArea.innerHTML = `
+                <div class="upload-content">
+                    <div class="upload-icon">📷</div>
+                    <div class="upload-text">
+                        <p>拖拽图片到此处或点击上传</p>
+                        <p class="upload-hint">支持 PNG、JPG、JPEG 等格式，最大 10MB</p>
+                        <p class="upload-hint">也可以直接粘贴剪贴板中的截图（Ctrl+V / Cmd+V）</p>
+                    </div>
+                </div>
+            `;
+            currentImageFile = null;
+        }
+
+        function showOCRUnavailable(errorMessage) {
+            const uploadArea = document.getElementById('imageUploadArea');
+            const imagePreview = document.getElementById('imagePreview');
+
+            // 隐藏图片预览
+            imagePreview.style.display = 'none';
+
+            // 显示OCR不可用的详细信息
+            uploadArea.innerHTML = `
+                <div class="upload-content">
+                    <div class="upload-icon">⚠️</div>
+                    <div class="upload-text">
+                        <p><strong>OCR功能不可用</strong></p>
+                        <p class="upload-hint">需要安装OCR依赖包才能识别图片中的文字</p>
+                        <div style="margin-top: 15px; padding: 10px; background-color: #f5f5f5; border-radius: 4px; text-align: left; font-size: 12px;">
+                            <p><strong>安装步骤：</strong></p>
+                            <p>1. 安装Tesseract OCR引擎：</p>
+                            <code>brew install tesseract tesseract-lang</code>
+                            <p>2. 安装Python依赖包：</p>
+                            <code>pip install pytesseract pillow opencv-python</code>
+                            <p>3. 重启应用</p>
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="resetUploadArea()" style="margin-top: 10px;">返回上传</button>
+                    </div>
+                </div>
+            `;
+            uploadArea.style.display = 'block';
+        }
+
+        function getFieldLabel(fieldName) {
+            const labels = {
+                'company_name': '公司名称',
+                'tax_number': '税号',
+                'reg_address': '注册地址',
+                'reg_phone': '注册电话',
+                'bank_name': '开户行',
+                'bank_account': '银行账号',
+                'contact_name': '联系人',
+                'contact_phone': '联系电话',
+                'mail_address': '邮寄地址',
+                'jdy_account': '简道云账号'
+            };
+            return labels[fieldName] || fieldName;
+        }
+
+        // 内联编辑功能
+        function startInlineEdit(element) {
+            if (element.classList.contains('editing')) {
+                return; // 已经在编辑状态
+            }
+
+            const fieldName = element.getAttribute('data-field');
+            const currentValue = element.textContent;
+
+            // 添加编辑状态样式
+            element.classList.add('editing');
+
+            // 创建输入框
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'field-value-input';
+            input.value = currentValue;
+
+            // 替换内容
+            element.innerHTML = '';
+            element.appendChild(input);
+
+            // 聚焦并选中文本
+            input.focus();
+            input.select();
+
+            // 保存编辑
+            function saveEdit() {
+                const newValue = input.value.trim();
+                if (newValue !== currentValue) {
+                    recognizedFields[fieldName] = newValue;
+                }
+
+                // 恢复显示
+                element.classList.remove('editing');
+                element.textContent = newValue || currentValue;
+                element.onclick = () => startInlineEdit(element);
+            }
+
+            // 取消编辑
+            function cancelEdit() {
+                element.classList.remove('editing');
+                element.textContent = currentValue;
+                element.onclick = () => startInlineEdit(element);
+            }
+
+            // 事件监听
+            input.addEventListener('blur', saveEdit);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveEdit();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEdit();
+                }
+            });
+
+            // 移除点击事件，避免重复触发
+            element.onclick = null;
+        }
+
+        // 直接应用字段到表单（新的简化流程）
+        function applyFieldsToFormDirectly(fields) {
+            let appliedCount = 0;
+            const appliedFields = [];
+
+            for (const [fieldName, value] of Object.entries(fields)) {
+                const formField = document.querySelector(`[name="${fieldName}"]`);
+                if (formField && value.trim()) {
+                    formField.value = value.trim();
+                    // 添加视觉反馈
+                    formField.classList.add('auto-filled');
+                    setTimeout(() => {
+                        formField.classList.remove('auto-filled');
+                    }, 3000);
+                    appliedCount++;
+                    appliedFields.push(getFieldLabel(fieldName));
+                }
+            }
+
+            if (appliedCount > 0) {
+                // 触发相关事件（如公司名称查询）
+                const companyNameField = document.querySelector('[name="company_name"]');
+                if (companyNameField && companyNameField.value) {
+                    // 触发公司名称查询
+                    setTimeout(() => {
+                        const event = new Event('input', { bubbles: true });
+                        companyNameField.dispatchEvent(event);
+                    }, 500);
+                }
+            }
+
+            return { appliedCount, appliedFields };
+        }
+
+        // 保留原有的应用函数（用于手动应用）
+        function applyFieldsToForm() {
+            const result = applyFieldsToFormDirectly(recognizedFields);
+            if (result.appliedCount > 0) {
+                alert(`成功应用 ${result.appliedCount} 个字段到表单`);
+            } else {
+                alert('没有可应用的字段');
+            }
+        }
+
+        // 显示/隐藏原始文本
+        function toggleRawText() {
+            const rawTextDiv = document.getElementById('rawText');
+            const btn = document.getElementById('showRawTextBtn');
+
+            if (rawTextDiv.style.display === 'none') {
+                rawTextDiv.style.display = 'block';
+                btn.textContent = '隐藏原文';
+            } else {
+                rawTextDiv.style.display = 'none';
+                btn.textContent = '查看原文';
+            }
+        }
+
+        // 初始化智能表单填充功能
+        document.addEventListener('DOMContentLoaded', function() {
+            initImageUpload();
+        });
+
+        // 模板选择功能
+        document.querySelectorAll('.btn-template').forEach(button => {
+            button.addEventListener('click', function () {
+                const templateName = this.dataset.template;
+
+                // 移除其他按钮的active状态
+                document.querySelectorAll('.btn-template').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                // 添加当前按钮的active状态
+                this.classList.add('active');
+
+                // 从服务器获取模板文件
+                fetch(`/docx_templates/${templateName}`, {
+                    method: 'GET',
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`模板文件获取失败: ${response.status}`);
+                        }
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        // 创建文件对象
+                        const file = new File([blob], templateName, {
+                            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        });
+                        
+                        // 设置到文件输入框
+                        const fileInput = document.getElementById('fileInput');
+                        
+                        // 使用 DataTransfer API
+                        try {
+                            const dataTransfer = new DataTransfer();
+                            dataTransfer.items.add(file);
+                            fileInput.files = dataTransfer.files;
+                        } catch (error) {
+                            console.error('文件设置失败:', error);
+                            alert('文件设置失败，请手动上传文件');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('模板加载失败:', error);
+                        alert('模板加载失败，请检查模板文件是否存在或手动上传文件');
+                    });
+            });
+        });
+
+
+
+
+
+        // 检查并显示最后导入时间
+        fetch('/get_last_import_time')
+            .then(response => response.json())
+            .then(data => {
+                if (data.last_import_time) {
+                    document.getElementById('lastImportTime').textContent = `最后导入: ${data.last_import_time}`;
+                }
+            });
+
+        // Excel文件上传处理
+        document.getElementById('excelUpload').addEventListener('change', function (e) {
+            if (!this.files.length) return;
+
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload_excel', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        document.getElementById('lastImportTime').textContent = `最后导入: ${data.last_import_time}`;
+                        alert('Excel文件导入成功');
+                    }
+                })
+                .catch(error => {
+                    alert('文件上传失败: ' + error);
+                });
+
+            // 清除文件选择，允许重复选择同一文件
+            this.value = '';
+        });
+
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // 客户查询功能
+        const debounceQueryCustomer = debounce((event) => {
+            const jdyAccount = event.target.value;
+            if (jdyAccount.length < 3) return; // 至少输入3个字符才开始查询
+            queryCustomer(jdyAccount);
+        }, 500); // 500ms 防抖
+
+        async function queryCustomer(jdyAccount) {
+            try {
+                const response = await fetch('/query_customer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ jdy_id: jdyAccount })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error('查询错误:', error);
+                    throw new Error(error.error || '查询失败');
+                }
+
+                const data = await response.json();
+
+                if (!data.results || data.results.length === 0) {
+                    throw new Error('未找到客户信息');
+                }
+
+                // 使用第一个匹配结果
+                const customerData = data.results[0];
+
+                // 显示客户信息
+                document.getElementById('accountEnterpriseName').textContent = customerData.account_enterprise_name || '';
+                document.getElementById('integrationMode').textContent = customerData.integration_mode || '';
+                document.getElementById('expiryDate').textContent = customerData.expiry_date || '';
+                document.getElementById('uidArr').textContent = customerData.uid_arr || '';
+                document.getElementById('customerClassification').textContent = customerData.customer_classification || '';
+                document.getElementById('salesPerson').textContent = customerData.sales || '';
+                document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
+                document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
+
+                // 自动填充公司名称（优先使用公司名称，如果为空则使用账号-企业名称）
+                const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan') 
+                    ? customerData.company_name 
+                    : customerData.account_enterprise_name || '';
+                document.querySelector('[name="company_name"]').value = companyNameToUse;
+                
+                // 自动填充税号
+                if (customerData.tax_number && customerData.tax_number !== 'nan') {
+                    document.querySelector('[name="tax_number"]').value = customerData.tax_number;
+                }
+
+                // 显示客户信息框
+                document.getElementById('customerInfo').style.display = 'block';
+            } catch (error) {
+                alert(error.message);
+                document.getElementById('customerInfo').style.display = 'none';
+            }
+        }
+
+        // 客户查询功能（通过公司名称）
+        const debounceQueryByCompanyName = debounce((event) => {
+            const companyName = event.target.value;
+            if (companyName.length < 2) return; // 至少输入2个字符才开始查询
+            queryByCompanyName(companyName);
+        }, 500); // 500ms 防抖
+
+        async function queryByCompanyName(companyName) {
+            try {
+                const response = await fetch('/query_customer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ company_name: companyName })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    console.error('查询错误:', error);
+                    throw new Error(error.error || '查询失败');
+                }
+
+                const data = await response.json();
+
+                if (!data.results || data.results.length === 0) {
+                    throw new Error('未找到客户信息');
+                }
+
+                // 使用第一个匹配结果
+                const customerData = data.results[0];
+
+                // 显示客户信息并自动填充相关字段
+                updateCustomerInfo(customerData);
+            } catch (error) {
+                alert(error.message);
+                document.getElementById('customerInfo').style.display = 'none';
+            }
+        }
+
+        // 更新客户信息显示
+        function updateCustomerInfo(customerData) {
+            // 显示客户信息
+            document.getElementById('accountEnterpriseName').textContent = customerData.account_enterprise_name || '';
+            document.getElementById('integrationMode').textContent = customerData.integration_mode || '';
+            document.getElementById('expiryDate').textContent = customerData.expiry_date || '';
+            document.getElementById('uidArr').textContent = customerData.uid_arr || '';
+            document.getElementById('customerClassification').textContent = customerData.customer_classification || '';
+            document.getElementById('salesPerson').textContent = customerData.sales || '';
+            document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
+            document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
+
+            // 自动填充简道云账号（使用用户ID）
+            if (customerData.user_id) {
+                document.querySelector('[name="jdy_account"]').value = customerData.user_id;
+            }
+            
+            // 自动填充公司名称（优先使用公司名称，如果为空则使用账号-企业名称）
+            const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan') 
+                ? customerData.company_name 
+                : customerData.account_enterprise_name || '';
+            document.querySelector('[name="company_name"]').value = companyNameToUse;
+            
+            // 自动填充税号
+            if (customerData.tax_number && customerData.tax_number !== 'nan') {
+                document.querySelector('[name="tax_number"]').value = customerData.tax_number;
+            }
+
+            // 显示客户信息框
+            document.getElementById('customerInfo').style.display = 'block';
+        }
+
+        document.getElementById('contractForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const templateFile = document.querySelector('input[type="file"]').files[0];
+            if (!templateFile) {
+                alert('请选择合同模板文件');
+                return;
+            }
+            
+            // 创建FormData对象并添加所有表单数据
+            const formData = new FormData(this);
+            
+            // 确保文件和其他必要字段都已添加
+            if (!formData.has('template')) {
+                formData.append('template', templateFile);
+            }
+            
+            // 提交表单
+            // 提交表单
+            fetch('/generate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        console.error('服务器响应错误:', response.status, text);
+                        // 尝试解析JSON错误信息
+                        try {
+                            const errorObj = JSON.parse(text);
+                            throw new Error(errorObj.error || `服务器错误 (${response.status}): ${text}`);
+                        } catch (e) {
+                            // 如果不是JSON，直接显示文本
+                            throw new Error(`服务器错误 (${response.status}): ${text}`);
+                        }
+                    });
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // 创建下载链接
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                
+                // 设置文件名
+                const companyName = document.querySelector('[name="company_name"]').value;
+                const jdyAccount = document.querySelector('[name="jdy_account"]').value;
+                const startYear = document.getElementById('startYear').value;
+                const endYear = document.getElementById('endYear').value;
+                const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                
+                // 新的文件命名格式：开始年份-结束年份+公司名称+账号ID+帆软简道云续费合同+合同生成日期
+                a.download = `${startYear}-${endYear}${companyName}-${jdyAccount}-帆软简道云续费合同${currentDate}.docx`;
+                
+                // 触发下载
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                // 生成合同成功后自动推进到合同阶段
+                const jdyAccountTrimmed = jdyAccount.trim();
+                if (jdyAccountTrimmed && typeof onContractGenerated === 'function') {
+                    onContractGenerated(jdyAccountTrimmed);
+                }
+                
+                // 显示开票录入按钮
+                showInvoiceEntryButton();
+            })
+            .catch(error => {
+                console.error('生成合同失败:', error);
+                alert('生成合同失败: ' + error.message);
+            });
+        });
+
+        // 显示开票录入按钮
+        function showInvoiceEntryButton() {
+            // 在页面顶部显示开票录入按钮
+            const existingButton = document.getElementById('invoiceEntryButton');
+            if (existingButton) {
+                existingButton.remove();
+            }
+            
+            const button = document.createElement('div');
+            button.id = 'invoiceEntryButton';
+            button.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 1000;
+                background: #28a745;
+                color: white;
+                padding: 15px 25px;
+                border-radius: 10px;
+                box-shadow: 0 4px 20px rgba(40, 167, 69, 0.4);
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: bold;
+                transition: all 0.3s ease;
+                animation: pulse 2s infinite;
+            `;
+            button.innerHTML = '📋 开票录入 (点击进入)';
+            
+            // 添加脉冲动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                    100% { transform: scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            button.addEventListener('click', function() {
+                window.open('https://www.jiandaoyun.com/dashboard#/app/5a015dd12d85443cacd1b893/form/020100200000000000000001', '_blank');
+                // 点击后立即隐藏
+                this.remove();
+            });
+            
+            button.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px) scale(1.02)';
+                this.style.boxShadow = '0 8px 25px rgba(40, 167, 69, 0.6)';
+            });
+            
+            button.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0) scale(1)';
+                this.style.boxShadow = '0 4px 20px rgba(40, 167, 69, 0.4)';
+            });
+            
+            document.body.appendChild(button);
+            
+            // 显示成功提示
+            const assistAnswer = document.getElementById('assistAnswer');
+            if (assistAnswer) {
+                assistAnswer.innerHTML = '✅ 合同生成成功！<br>📋 <strong>开票录入按钮已显示在右上角</strong>（15秒后自动隐藏）';
+                assistAnswer.style.color = '#28a745';
+            }
+            
+            // 15秒后自动隐藏（延长显示时间）
+            setTimeout(() => {
+                if (button && button.parentNode) {
+                    button.style.opacity = '0';
+                    button.style.transform = 'translateY(-10px)';
+                    setTimeout(() => {
+                        if (button && button.parentNode) {
+                            button.remove();
+                        }
+                    }, 300);
+                }
+            }, 15000);
+        }
+
+        // 初始化
+        initEventListeners();
+    </script>
+
+    <!-- 悬浮球容器 -->
+    <div id="assistBall" class="assist-ball" title="快捷操作（Ctrl/⌘ + Shift + K）">⚡</div>
+    <div id="assistPanel" class="assist-panel" aria-hidden="true">
+      <div class="assist-panel-header">
+        <strong>快速操作</strong>
+        <div class="monitor-controls">
+          <button id="assistClose" class="btn btn-secondary" style="min-width:auto;padding:6px 10px;background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:4px;font-size:16px;font-weight:bold;">✕</button>
+        </div>
+      </div>
+      <div class="assist-panel-body">
+        <!-- 识别你的唯一ID：简道云账号 -->
+        <input id="assistId" class="assist-input" placeholder="简道云账号（外部ID）自动识别，必要时手填">
+        <div class="assist-row">
+          <button id="btnStageInvoice" class="btn">推进：开票</button>
+          <button id="btnStageAdvanceInvoice" class="btn">推进：提前开</button>
+          <button id="btnStagePaid" class="btn">推进：回款</button>
+        </div>
+
+        <div class="assist-unsigned">
+          <div class="unsigned-header">
+            <h4>未来30天客户看板</h4>
+            <div class="monitor-controls">
+              <button id="btnRefreshUnsigned" class="btn btn-secondary btn-refresh">刷新</button>
+            </div>
+          </div>
+          <div class="unsigned-body">
+            <div id="status-filter-container" class="filter-container">
+              <!-- 状态筛选器将在这里动态生成 -->
+            </div>
+            <div id="unsignedCustomersList" class="unsigned-list">
+              <div class="loading" style="text-align: center; color: #666; padding: 10px;">加载中...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="assist-monitor">
+          <div class="monitor-header">
+            <h4>自动合同监控</h4>
+            <div class="monitor-controls">
+              <button id="btnCheckNow" class="btn btn-secondary btn-refresh">立即检查</button>
+            </div>
+          </div>
+          <div class="monitor-status">
+            <div>状态: <span id="monitorStatusText">运行中</span></div>
+            <div>上次检查: <span id="lastCheckTime">从未</span></div>
+          </div>
+          <div id="monitorResults" class="monitor-results">
+            <!-- 监控结果将显示在这里 -->
+          </div>
+        </div>
+
+        <input id="assistAsk" class="assist-input" placeholder="问一句（先本地检索，之后接入知识库/记忆）">
+        <div class="assist-row">
+          <button id="btnAsk" class="btn">问</button>
+          <button id="btnClear" class="btn btn-secondary">清空</button>
+        </div>
+        <div id="assistAnswer" class="assist-help">提示：生成合同成功后会自动推进到"合同"。</div>
+      </div>
+    </div>
+</body>
+
+</html>

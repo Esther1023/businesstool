@@ -2,7 +2,7 @@
 
 ## 当前状态
 - ✅ 代码已准备完毕
-- ✅ GitHub仓库已创建：https://github.com/Esther1023/ocr-smart-form-system
+- ✅ GitHub仓库已创建：https://github.com/Esther1023/businesstool
 - ⚠️ 需要解决权限问题
 
 ## 🔑 解决方案：使用个人访问令牌
@@ -39,7 +39,7 @@ git push github master
 ### 步骤3：验证推送成功
 
 推送成功后，访问您的GitHub仓库确认代码已上传：
-https://github.com/Esther1023/ocr-smart-form-system
+https://github.com/Esther1023/businesstool
 
 ## 🔄 替代方案：使用SSH
 
@@ -47,7 +47,7 @@ https://github.com/Esther1023/ocr-smart-form-system
 
 ```bash
 # 更改为SSH URL
-git remote set-url github git@github.com:Esther1023/ocr-smart-form-system.git
+git remote set-url github git@github.com:Esther1023/businesstool.git
 
 # 推送
 git push github master
