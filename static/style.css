@@ -19,7 +19,7 @@
 /* 智能计算器样式 */
 .smart-calculator {
     position: fixed;
-    top: 20px;
+    top: 40px;
     left: 20px;
     width: 335px;
     background-color: var(--card-background);
@@ -30,15 +30,23 @@
     font-family: inherit;
 }
 
-.calculator-header {
-    padding: 12px 15px;
+/* 统一标题横栏样式 */
+.calculator-header,
+.dashboard-header {
+    padding: 8px 15px; /* 减少上下padding，从12px改为8px，保持左右padding不变 */
     background-color: var(--secondary-color);
     border-radius: 8px 8px 0 0;
     border-bottom: 1px solid var(--border-color);
     font-size: 16px;
     font-weight: 600;
     color: var(--text-color);
+    width: 335px;
+    box-sizing: border-box;
     text-align: center;
+    height: 40px; /* 设置固定高度，确保标题栏变窄 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .calculator-display {
@@ -195,10 +203,12 @@
 .future-expiring-dashboard {
     position: fixed;
     left: 20px;
-    top: 60%;
-    transform: translateY(-30%);
+    bottom: 20px; /* 固定在底部，保持下面位置不变 */
+    top: auto; /* 取消顶部百分比定位 */
+    transform: none; /* 取消垂直方向移动 */
     width: 335px;
-    max-height: 300px;
+    max-height: 400px; /* 增加最大高度，使备忘录长度合适 */
+    height: 550px; /* 设置固定高度 */
     overflow-y: auto;
     background-color: #fff;
     border-radius: 8px;
