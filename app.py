@@ -9,6 +9,9 @@ import time
 from pathlib import Path
 import re
 
+# 导入Flask相关模块
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+
 # 延迟导入OCR相关模块，避免启动时失败
 template_handler = None
 ocr_service = None
