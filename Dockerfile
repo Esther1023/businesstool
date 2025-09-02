@@ -39,3 +39,11 @@ EXPOSE $PORT
 
 # 启动命令
 CMD gunicorn --bind 0.0.0.0:$PORT app:app --workers 1 --timeout 120
+
+
+# 更新 pip 版本
+RUN pip install --upgrade pip
+
+# 或者创建非 root 用户（可选）
+RUN adduser --disabled-password --gecos '' appuser
+USER appuser
