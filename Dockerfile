@@ -18,31 +18,32 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 更新 pip 版本
+# 更新 pip 版本（在安装依赖之前）
 RUN pip install --upgrade pip
 
-# 复制requirements文件
-COPY requirements.txt .
-
-# 安装Python依赖
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 创建非 root 用户
-RUN adduser --disabled-password --gecos '' appuser
-
-# 复制应用代码
-COPY . .
-
-# 创建必要的目录并设置权限
-RUN mkdir -p logs uploads out_data && \
+# 创建非 root 用户（在复制文件之前）
+RUN adduser --disabled-password --gecos '' appuser && \
     chown -R appuser:appuser /app
 
 # 切换到非 root 用户
 USER appuser
 
+# 复制requirements文件
+COPY --chown=appuser:appuser requirements.txt .
+
+# 安装Python依赖（现在以非 root 用户运行）
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# 复制应用代码
+COPY --chown=appuser:appuser . .
+
+# 创建必要的目录
+RUN mkdir -p logs uploads out_data
+
 # 设置环境变量
 ENV FLASK_ENV=production
 ENV PYTHONPATH=/app
+ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # 暴露端口
 EXPOSE $PORT
