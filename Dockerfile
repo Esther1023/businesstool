@@ -18,17 +18,27 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
+# 更新 pip 版本
+RUN pip install --upgrade pip
+
 # 复制requirements文件
 COPY requirements.txt .
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 创建非 root 用户
+RUN adduser --disabled-password --gecos '' appuser
+
 # 复制应用代码
 COPY . .
 
-# 创建必要的目录
-RUN mkdir -p logs uploads out_data
+# 创建必要的目录并设置权限
+RUN mkdir -p logs uploads out_data && \
+    chown -R appuser:appuser /app
+
+# 切换到非 root 用户
+USER appuser
 
 # 设置环境变量
 ENV FLASK_ENV=production
@@ -39,11 +49,3 @@ EXPOSE $PORT
 
 # 启动命令
 CMD gunicorn --bind 0.0.0.0:$PORT app:app --workers 1 --timeout 120
-
-
-# 更新 pip 版本
-RUN pip install --upgrade pip
-
-# 或者创建非 root 用户（可选）
-RUN adduser --disabled-password --gecos '' appuser
-USER appuser
