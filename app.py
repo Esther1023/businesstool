@@ -376,6 +376,12 @@ def get_unsigned_customers():
                             should_include = True
                         elif status_filter == 'paid' and ('回款' in stage_normalized or '已付' in stage_normalized):
                             should_include = True
+                        elif status_filter == 'upsell' and '增购' in stage_normalized:
+                            should_include = True
+                        elif status_filter == 'invalid' and '无效' in stage_normalized:
+                            should_include = True
+                        elif status_filter == 'lost' and '失联' in stage_normalized:
+                            should_include = True
                         
                         if should_include:
                             # 处理责任销售字段
@@ -449,6 +455,12 @@ def get_unsigned_customers():
                 available_statuses.append({'value': 'advance_invoice', 'label': '提前开状态', 'count': len([c for c in all_customers_30days if '提前开' in c['customer_stage']])})
             elif '回款' in stage or '已付' in stage:
                 available_statuses.append({'value': 'paid', 'label': '回款状态', 'count': len([c for c in all_customers_30days if '回款' in c['customer_stage'] or '已付' in c['customer_stage']])})
+            elif '增购' in stage:
+                available_statuses.append({'value': 'upsell', 'label': '增购状态', 'count': len([c for c in all_customers_30days if '增购' in c['customer_stage']])})
+            elif '无效' in stage:
+                available_statuses.append({'value': 'invalid', 'label': '无效状态', 'count': len([c for c in all_customers_30days if '无效' in c['customer_stage']])})
+            elif '失联' in stage:
+                available_statuses.append({'value': 'lost', 'label': '失联状态', 'count': len([c for c in all_customers_30days if '失联' in c['customer_stage']])})
         
         # 去重
         seen_values = set()
@@ -474,6 +486,66 @@ def get_unsigned_customers():
             'error': f'获取客户信息时出现问题',
             'query_date': datetime.now().strftime('%Y年%m月%d日')
         }), 500
+
+@app.route('/export_unsigned_customers')
+@login_required
+def export_unsigned_customers():
+    """导出所有客户数据，包含全部3606行"""
+    try:
+        # 检查文件是否存在
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件: {excel_path}")
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'error': '数据文件不存在'}), 500
+
+        try:
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'error': '数据文件读取失败'}), 500
+
+        # 检查必要的列是否存在
+        required_columns = ['用户ID', '账号-企业名称', '到期日期', '客户阶段']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f"Excel文件中缺少必要列: {missing_columns}")
+            return jsonify({'error': f'数据格式错误：缺少必要列 {missing_columns}'}), 500
+        
+        # 获取当前日期
+        now = datetime.now()
+        today = now.date()
+        
+        # 创建导出的DataFrame，直接使用原始数据
+        export_df = df.copy()
+        
+        # 创建临时文件
+        temp_file = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        
+        # 保存为Excel文件
+        export_df.to_excel(temp_file.name, index=False)
+        
+        logger.info(f"导出了{len(export_df)}个客户数据到临时文件")
+        
+        # 返回文件下载
+        return send_file(
+            temp_file.name,
+            as_attachment=True,
+            download_name=f"六大战区全部客户_{today.strftime('%Y%m%d')}.xlsx",
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"导出客户数据失败: {str(e)}")
+        return jsonify({'error': f'导出客户数据时出现问题: {str(e)}'}), 500
+    finally:
+        # 确保临时文件被清理
+        try:
+            if 'temp_file' in locals():
+                os.unlink(temp_file.name)
+        except Exception as e:
+            logger.error(f"清理临时文件时发生错误: {str(e)}")
 
 @app.route('/get_expiring_customers')
 @login_required
@@ -682,8 +754,13 @@ def query_customer():
         if jdy_id:
             matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
         else:
-            # 修复：应该查询"公司名称"列，而不是"账号-企业名称"列
-            matching_rows = df[df['公司名称'].astype(str).str.contains(str(company_name), case=False, na=False)]
+            # 优化：同时在"公司名称"和"账号-企业名称"列中进行搜索
+            company_name_lower = str(company_name).lower()
+            # 使用OR条件进行多列搜索
+            matching_rows = df[
+                (df['公司名称'].astype(str).str.lower().str.contains(company_name_lower, na=False)) |
+                (df['账号-企业名称'].astype(str).str.lower().str.contains(company_name_lower, na=False))
+            ]
             
         if matching_rows.empty:
             query_type = "简道云账号" if jdy_id else "公司名称"

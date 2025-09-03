@@ -35,7 +35,7 @@ class StageManager:
         
         # 状态变更规则定义
         self.stage_rules = {
-            StageType.NA.value: [StageType.CONTRACT.value],
+            StageType.NA.value: [StageType.CONTRACT.value, "增购", "无效", "失联"],
             StageType.CONTRACT.value: [StageType.ADVANCE_INVOICE.value, StageType.INVOICE.value],
             StageType.ADVANCE_INVOICE.value: [StageType.INVOICE.value],
             StageType.INVOICE.value: [StageType.PAID.value],
@@ -46,6 +46,9 @@ class StageManager:
         self.stage_priority = {
             StageType.NA.value: 0,
             StageType.CONTRACT.value: 1,
+            "增购": 1,
+            "无效": 1,
+            "失联": 1,
             StageType.ADVANCE_INVOICE.value: 2,
             StageType.INVOICE.value: 3,
             StageType.PAID.value: 4

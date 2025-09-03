@@ -1191,6 +1191,9 @@
 
                 // 显示客户信息框
                 document.getElementById('customerInfo').style.display = 'block';
+                
+                // 显示下单流程提醒
+                showOrderProcessTip(customerData.integration_mode);
             } catch (error) {
                 alert(error.message);
                 document.getElementById('customerInfo').style.display = 'none';
@@ -1442,8 +1445,6 @@
         <input id="assistId" class="assist-input" placeholder="简道云账号（外部ID）自动识别，必要时手填">
         <div class="assist-row">
           <button id="btnStageContract" class="btn">合同</button>
-        </div>
-        <div class="assist-row">
           <button id="btnStageInvoice" class="btn">开票</button>
         </div>
         <div class="assist-row">

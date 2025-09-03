@@ -619,6 +619,52 @@ function processImageForOCR(imageSrc) {
 
 
 
+// 根据集成模式显示下单流程提醒
+function showOrderProcessTip(mode) {
+    // 检查是否已存在提醒区域，如果存在则移除
+    let tipElement = document.getElementById('integrationModeTip');
+    if (!tipElement) {
+        // 创建提醒区域元素
+        tipElement = document.createElement('div');
+        tipElement.id = 'integrationModeTip';
+        tipElement.className = 'integration-mode-tip';
+        
+        // 将提醒区域添加到集成模式span元素后面，而不是整个info-row后面
+        const integrationModeElement = document.getElementById('integrationMode');
+        if (integrationModeElement) {
+            // 为集成模式文本添加粉红色样式
+            integrationModeElement.style.color = '#ff6b81';
+            
+            // 将提醒区域添加到集成模式元素后面
+            integrationModeElement.after(tipElement);
+        }
+    }
+    
+    // 确保mode是字符串，并且转换为小写进行比较，提高识别准确率
+    const modeText = String(mode).toLowerCase().trim();
+    
+    // 根据集成模式显示不同的提醒信息
+    if (modeText.includes('企微')) {
+        tipElement.innerHTML = `
+            <div class="tip-content">
+                <strong>⚠️</strong>
+                <p class="integration-tip-text">创建订单+企微接口</p>
+            </div>
+        `;
+        tipElement.style.display = 'block';
+    } else if (modeText.includes('钉钉')) {
+        tipElement.innerHTML = `
+            <div class="tip-content">
+                <strong>⚠️</strong>
+                <p class="integration-tip-text">直接在钉钉后台下单</p>
+            </div>
+        `;
+        tipElement.style.display = 'block';
+    } else {
+        tipElement.style.display = 'none';
+    }
+}
+
 function queryCustomer() {
     const jdyId = document.querySelector('[name="jdy_account"]').value.trim();
     if (!jdyId) {
@@ -656,7 +702,8 @@ function queryCustomer() {
         
         // 更新显示内容
         document.getElementById('accountEnterpriseName').textContent = data.account_enterprise_name || '暂无数据';
-        document.getElementById('integrationMode').textContent = data.integration_mode || '暂无数据';
+        const integrationMode = data.integration_mode || '暂无数据';
+        document.getElementById('integrationMode').textContent = integrationMode;
         document.getElementById('expiryDate').textContent = data.expiry_date || '暂无数据';
         document.getElementById('uidArr').textContent = data.uid_arr || '0元';
         document.getElementById('customerClassification').textContent = data.customer_classification || '暂无数据';
@@ -666,6 +713,9 @@ function queryCustomer() {
         
         // 显示结果区域
         document.getElementById('customerInfo').style.display = 'block';
+        
+        // 显示下单流程提醒
+        showOrderProcessTip(integrationMode);
     })
     .catch(error => {
         console.error('Error:', error);
@@ -850,13 +900,37 @@ function createSmartCalculator() {
             try {
                 // 将操作符转换为JavaScript操作符
                 const op = operator === '×' ? '*' : operator === '÷' ? '/' : operator;
-                result = eval(`${firstOperand} ${op} ${secondOperand}`);
                 
-                // 格式化结果
-                if (Number.isInteger(result)) {
+                // 对所有运算都使用更精确的计算方式
+                const num1 = parseFloat(firstOperand);
+                const num2 = parseFloat(secondOperand);
+                
+                if (op === '+') {
+                    result = num1 + num2;
+                } else if (op === '-') {
+                    result = num1 - num2;
+                } else if (op === '*') {
+                    result = num1 * num2;
+                } else if (op === '/') {
+                    result = num1 / num2;
+                }
+                
+                // 格式化结果 - 更好的小数处理
+                if (Number.isInteger(result) || (Math.abs(result) >= 1e15 || Math.abs(result) < 1e-10)) {
+                    // 整数或非常大的/小的数使用科学计数法
                     display.value = result.toString();
                 } else {
-                    display.value = result.toFixed(10).replace(/\.?0+$/, '');
+                    // 对于普通小数，使用toLocaleString确保更好的格式化
+                    // 或者使用正则表达式去掉末尾的0
+                    let formatted = result.toFixed(12).replace(/\.?0+$/, '');
+                    // 确保小数点后至少保留6位有效数字
+                    if (formatted.includes('.')) {
+                        const parts = formatted.split('.');
+                        if (parts[1].length < 6) {
+                            formatted = result.toFixed(6).replace(/\.?0+$/, '');
+                        }
+                    }
+                    display.value = formatted;
                 }
             } catch (error) {
                 display.value = '错误';
@@ -1168,6 +1242,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // 显示客户列表
             let html = `<div style="font-size: 12px; color: #666; margin-bottom: 8px; text-align: center;">共找到 ${data.total_count} 个客户 (${data.query_date}) | 当前筛选: ${getFilterLabel(data.current_filter)}</div>`;
             
+            // 添加导出按钮
+            html += `<div style="margin-bottom: 10px; text-align: center;">
+                <button id="exportUnsignedCustomers" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">📊 导出所有客户列表</button>
+            </div>`;
+            
             data.customers.forEach(customer => {
                 const stageClass = getStageClass(customer.customer_stage);
                 html += `
@@ -1177,20 +1256,39 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
                             <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
                             <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
-                            <div><strong>状态:</strong> <span class="${stageClass}">${customer.customer_stage}</span></div>
+                            <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${customer.customer_stage}</span></div>
+                            ${customer.integration_mode ? `<div style="margin-bottom: 2px;"><strong>集成模式:</strong> ${getIntegrationModeTip(customer.integration_mode)}</div>` : ''}
                         </div>
                     </div>
                 `;
             });
             
             unsignedList.innerHTML = html;
+            
+            // 为导出按钮添加点击事件
+            document.getElementById('exportUnsignedCustomers').addEventListener('click', function() {
+                const exportUrl = '/export_unsigned_customers';
+                window.open(exportUrl, '_blank');
+            });
         })
         .catch(error => {
             console.error('获取客户数据错误:', error);
             unsignedList.innerHTML = '<div style="text-align: center; color: #e74c3c; padding: 10px;">获取数据失败，请稍后重试</div>';
         });
     }
-    
+
+    // 获取集成模式提醒
+    function getIntegrationModeTip(mode) {
+        if (!mode) return '';
+        
+        if (mode.includes('企微')) {
+            return `<span style="color: #1890ff;">${mode} <strong>⚠️ 需在SA后台和企微平台下单</strong></span>`;
+        } else if (mode.includes('钉钉')) {
+            return `<span style="color: #52c41a;">${mode} <strong>✅ 仅需在钉钉后台下单</strong></span>`;
+        }
+        return mode;
+    }
+
     function updateStatusFilter(availableStatuses, currentFilter) {
         const filterContainer = document.getElementById('status-filter-container');
         if (!filterContainer) return;
