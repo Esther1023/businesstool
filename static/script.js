@@ -1131,8 +1131,8 @@ document.addEventListener('DOMContentLoaded', function() {
         clearAssistPanel();
     });
     
-    // 初始化时加载未签订合同客户
-    fetchUnsignedCustomers();
+    // 初始化时加载未签订合同客户 - 默认显示NA状态
+    fetchUnsignedCustomers('na');
     
     // 初始化监控状态
     initializeMonitorStatus();
@@ -1334,8 +1334,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            // 显示客户列表
-            let html = `<div style="font-size: 12px; color: #666; margin-bottom: 8px; text-align: center;">共找到 ${data.total_count} 个客户 (${data.query_date}) | 当前筛选: ${getFilterLabel(data.current_filter)}</div>`;
+            // 显示客户列表 - 不显示数量统计信息
+            let html = '';
             
             // 添加导出按钮
             html += `<div style="margin-bottom: 10px; text-align: center;">
@@ -1394,9 +1394,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const buttonStyle = status.value === currentFilter ? 
                 'background: #007bff; color: white; border: 1px solid #007bff;' : 
                 'background: white; color: #007bff; border: 1px solid #007bff;';
+            // 使用getFilterLabel函数获取处理后的标签文本
+            const filteredLabel = getFilterLabel(status.value);
             html += `<button class="filter-btn ${activeClass}" data-filter="${status.value}"
                 style="${buttonStyle} padding: 4px 8px; margin: 2px; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                ${status.label} (${status.count})
+                ${filteredLabel} (${status.count})
             </button>`;
         });
         html += '</div>';
@@ -1415,12 +1417,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function getFilterLabel(filter) {
     const labels = {
-        'all': '全部状态',
-        'na': 'NA状态',
-        'contract': '合同状态',
-        'invoice': '开票状态',
-        'advance_invoice': '提前开状态',
-        'paid': '回款状态',
+        'all': '全部',
+        'na': 'NA',
+        'contract': '合同',
+        'invoice': '开票',
+        'advance_invoice': '提前开',
+        'paid': '回款',
         'invalid': '无效',
         'upsell': '增购',
         'lost': '失联'
