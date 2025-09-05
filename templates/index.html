@@ -1173,7 +1173,31 @@
                 document.getElementById('integrationMode').textContent = customerData.integration_mode || '';
                 document.getElementById('expiryDate').textContent = customerData.expiry_date || '';
                 document.getElementById('uidArr').textContent = customerData.uid_arr || '';
-                document.getElementById('customerClassification').textContent = customerData.customer_classification || '';
+                const customerClassification = document.getElementById('customerClassification');
+                const classificationText = customerData.customer_classification || '';
+                
+                // 检查是否是精确的"战区Name名单"
+                if (classificationText === '战区Name名单') {
+                    // 直接设置内联样式，使用!important确保优先级
+                    customerClassification.style.color = '#1890ff !important'; // 明显的蓝色
+                    customerClassification.style.fontWeight = '500';
+                    customerClassification.style.padding = '2px 6px';
+                    customerClassification.style.borderRadius = '4px';
+                    customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
+                    
+                    // 设置文本内容并添加提醒
+                    customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
+                } else {
+                    // 重置所有样式
+                    customerClassification.style.color = '';
+                    customerClassification.style.fontWeight = '';
+                    customerClassification.style.padding = '';
+                    customerClassification.style.borderRadius = '';
+                    customerClassification.style.backgroundColor = '';
+                    
+                    // 只显示原始文本，不添加提醒
+                    customerClassification.textContent = classificationText;
+                }
                 document.getElementById('salesPerson').textContent = customerData.sales || '';
                 document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
                 document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
@@ -1247,7 +1271,31 @@
             document.getElementById('integrationMode').textContent = customerData.integration_mode || '';
             document.getElementById('expiryDate').textContent = customerData.expiry_date || '';
             document.getElementById('uidArr').textContent = customerData.uid_arr || '';
-            document.getElementById('customerClassification').textContent = customerData.customer_classification || '';
+            const customerClassification = document.getElementById('customerClassification');
+            const classificationText = customerData.customer_classification || '';
+            
+            // 检查是否是精确的"战区Name名单"
+            if (classificationText === '战区Name名单') {
+                // 直接设置内联样式，使用!important确保优先级
+                customerClassification.style.color = '#1890ff !important'; // 明显的蓝色
+                customerClassification.style.fontWeight = '500';
+                customerClassification.style.padding = '2px 6px';
+                customerClassification.style.borderRadius = '4px';
+                customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
+                
+                // 设置文本内容并添加提醒
+                customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
+            } else {
+                // 重置所有样式
+                customerClassification.style.color = '';
+                customerClassification.style.fontWeight = '';
+                customerClassification.style.padding = '';
+                customerClassification.style.borderRadius = '';
+                customerClassification.style.backgroundColor = '';
+                
+                // 只显示原始文本，不添加提醒
+                customerClassification.textContent = classificationText;
+            }
             document.getElementById('salesPerson').textContent = customerData.sales || '';
             document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
             document.getElementById('jdySales').textContent = customerData.jdy_sales || '';

@@ -632,8 +632,8 @@ function showOrderProcessTip(mode) {
         // 将提醒区域添加到集成模式span元素后面，而不是整个info-row后面
         const integrationModeElement = document.getElementById('integrationMode');
         if (integrationModeElement) {
-            // 为集成模式文本添加粉红色样式
-            integrationModeElement.style.color = '#ff6b81';
+            // 为集成模式文本添加粉红色样式类
+            integrationModeElement.classList.add('pink-text');
             
             // 将提醒区域添加到集成模式元素后面
             integrationModeElement.after(tipElement);
@@ -706,7 +706,38 @@ function queryCustomer() {
         document.getElementById('integrationMode').textContent = integrationMode;
         document.getElementById('expiryDate').textContent = data.expiry_date || '暂无数据';
         document.getElementById('uidArr').textContent = data.uid_arr || '0元';
-        document.getElementById('customerClassification').textContent = data.customer_classification || '暂无数据';
+        
+        // 设置客户分类并处理战区名单的样式
+        const customerClassification = document.getElementById('customerClassification');
+        const classificationText = data.customer_classification || '暂无数据';
+        
+        // 检查是否是精确的"战区Name名单"
+        if (classificationText === '战区Name名单') {
+            // 移除可能存在的其他样式类
+            customerClassification.classList.remove('pink-text', 'blue-text');
+            
+            // 直接设置内联样式，使用!important确保优先级
+            customerClassification.style.color = '#1890ff !important'; // 明显的蓝色
+            customerClassification.style.fontWeight = '500';
+            customerClassification.style.padding = '2px 6px';
+            customerClassification.style.borderRadius = '4px';
+            customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
+            
+            // 设置文本内容并添加提醒
+            customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
+        } else {
+            // 重置所有样式
+            customerClassification.classList.remove('pink-text', 'blue-text');
+            customerClassification.style.color = '';
+            customerClassification.style.fontWeight = '';
+            customerClassification.style.padding = '';
+            customerClassification.style.borderRadius = '';
+            customerClassification.style.backgroundColor = '';
+            
+            // 只显示原始文本，不添加提醒
+            customerClassification.textContent = classificationText;
+        }
+        
         document.getElementById('salesPerson').textContent = data.sales || '暂无数据';
         document.getElementById('salesCnEn').textContent = data.sales_cn_en || '暂无数据';
         document.getElementById('jdySales').textContent = data.jdy_sales || '暂无数据';
@@ -745,6 +776,7 @@ function createSmartCalculator() {
     const calculatorDisplay = document.createElement('div');
     calculatorDisplay.className = 'calculator-display';
 
+    // 创建结果显示区域
     const displayInput = document.createElement('input');
     displayInput.type = 'text';
     displayInput.readOnly = true;
@@ -811,25 +843,68 @@ function createSmartCalculator() {
         });
     });
 
-    // 添加回车键执行等于操作
+    // 添加回车键执行等于操作，但只在计算器显示或按钮区域被点击后才捕获键盘事件
+    let calculatorActive = false;
+    
+    // 监听计算器容器的点击事件，标记计算器为活动状态
+    calculatorContainer.addEventListener('click', function() {
+        calculatorActive = true;
+    });
+    
+    // 监听整个文档的点击事件，如果点击不在计算器上，则标记计算器为非活动状态
+    document.addEventListener('click', function(e) {
+        if (!calculatorContainer.contains(e.target)) {
+            calculatorActive = false;
+        }
+    });
+    
+    // 修改键盘事件处理，使计算器输入框可以正常接收键盘输入
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            handleButtonClick('=');
-        } else if ('0123456789.'.includes(e.key)) {
-            handleButtonClick(e.key);
-        } else if (['+', '-', '*', '/'].includes(e.key)) {
-            handleButtonClick(e.key.replace('*', '×').replace('/', '÷'));
-        } else if (e.key.toLowerCase() === 'c') {
-            handleButtonClick('C');
-        } else if (e.key.toLowerCase() === 'escape') {
-            handleButtonClick('AC');
-        } else if (e.key === 'Backspace') {
-            // Backspace键实现删除单个字符的功能
-            display.value = display.value.slice(0, -1) || '0';
-        } else if (e.key === ' ') {
-            // 空格键实现乘法操作
-            handleButtonClick('×');
+        // 特殊处理：如果焦点在计算器输入框上，允许输入数字和小数点
+        if (e.target === displayInput) {
+            if ('0123456789.'.includes(e.key)) {
+                e.preventDefault();
+                handleButtonClick(e.key);
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                display.value = display.value.slice(0, -1) || '0';
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                handleButtonClick('=');
+            } else if (e.key === ' ') {
+                // 空格键在输入框中也实现乘法操作
+                e.preventDefault();
+                handleButtonClick('×');
+            }
+            return;
+        }
+        
+        // 如果是在其他文本输入区域（textarea, input等），则不处理计算器快捷键
+        if (e.target.matches('textarea, input:not(.calculator-input), [contenteditable="true"]')) {
+            return;
+        }
+        
+        // 只有当计算器活动时才处理键盘事件
+        if (calculatorActive) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleButtonClick('=');
+            } else if ('0123456789.'.includes(e.key)) {
+                handleButtonClick(e.key);
+            } else if (['+', '-', '*', '/'].includes(e.key)) {
+                handleButtonClick(e.key.replace('*', '×').replace('/', '÷'));
+            } else if (e.key.toLowerCase() === 'c') {
+                handleButtonClick('C');
+            } else if (e.key.toLowerCase() === 'escape') {
+                handleButtonClick('AC');
+            } else if (e.key === 'Backspace') {
+                // Backspace键实现删除单个字符的功能
+                display.value = display.value.slice(0, -1) || '0';
+            } else if (e.key === ' ') {
+                // 空格键实现乘法操作
+                e.preventDefault();
+                handleButtonClick('×');
+            }
         }
     });
 
@@ -862,7 +937,16 @@ function createSmartCalculator() {
             // 操作符按钮
             performCalculation();
             operator = value;
-            firstOperand = display.value;
+            
+            // 从显示的式子中提取结果值
+            const currentDisplay = display.value;
+            const resultMatch = currentDisplay.match(/=\s*(.+)$/);
+            if (resultMatch) {
+                firstOperand = resultMatch[1];
+            } else {
+                firstOperand = currentDisplay;
+            }
+            
             waitingForSecondOperand = true;
             return;
         }
@@ -870,9 +954,17 @@ function createSmartCalculator() {
         if (value === '=') {
             // 等于按钮
             performCalculation();
+            // 保存当前结果作为下一次计算的第一个操作数
+            const currentResult = display.value;
+            // 从显示的式子中提取结果值
+            const resultMatch = currentResult.match(/=\s*(.+)$/);
+            if (resultMatch) {
+                firstOperand = resultMatch[1];
+            } else {
+                firstOperand = currentResult;
+            }
             operator = '';
-            firstOperand = '';
-            waitingForSecondOperand = false;
+            waitingForSecondOperand = true;
             return;
         }
 
@@ -916,22 +1008,25 @@ function createSmartCalculator() {
                 }
                 
                 // 格式化结果 - 更好的小数处理
+                let formattedResult;
                 if (Number.isInteger(result) || (Math.abs(result) >= 1e15 || Math.abs(result) < 1e-10)) {
                     // 整数或非常大的/小的数使用科学计数法
-                    display.value = result.toString();
+                    formattedResult = result.toString();
                 } else {
                     // 对于普通小数，使用toLocaleString确保更好的格式化
                     // 或者使用正则表达式去掉末尾的0
-                    let formatted = result.toFixed(12).replace(/\.?0+$/, '');
+                    formattedResult = result.toFixed(12).replace(/\.?0+$/, '');
                     // 确保小数点后至少保留6位有效数字
-                    if (formatted.includes('.')) {
-                        const parts = formatted.split('.');
+                    if (formattedResult.includes('.')) {
+                        const parts = formattedResult.split('.');
                         if (parts[1].length < 6) {
-                            formatted = result.toFixed(6).replace(/\.?0+$/, '');
+                            formattedResult = result.toFixed(6).replace(/\.?0+$/, '');
                         }
                     }
-                    display.value = formatted;
                 }
+                
+                // 显示完整的运算式子
+                display.value = `${firstOperand} ${operator} ${secondOperand} = ${formattedResult}`;
             } catch (error) {
                 display.value = '错误';
             }
