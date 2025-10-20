@@ -53,6 +53,88 @@ class TemplateHandler:
         返回:
             str: 保存的文件路径
         """
+        # 检查是否为报价单模板
+        is_quote_template = '报价单' in self.template_path
+        
+        if is_quote_template:
+            # 报价单专用处理逻辑 - 只使用6个核心字段
+            context = self._process_quote_template(context)
+        else:
+            # 合同模板处理逻辑
+            context = self._process_contract_template(context)
+        
+        # 渲染模板
+        self.doc.render(context)
+        
+        # Generate output path if not provided
+        if output_path is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.splitext(os.path.basename(self.template_path))[0]
+            output_path = f"{filename}_{timestamp}.docx"
+    
+        # Save the modified document
+        self.doc.save(output_path)
+        return output_path
+    
+    def _process_quote_template(self, context: Dict[str, str]) -> Dict[str, str]:
+        """
+        处理报价单模板的变量
+        只使用6个核心字段：company_name, tax_number, jdy_account, total_amount, user_count, unit_price
+        """
+        # 核心字段保持不变
+        processed_context = {
+            'company_name': context.get('company_name', ''),
+            'tax_number': context.get('tax_number', ''),
+            'jdy_account': context.get('jdy_account', ''),
+            'total_amount': context.get('total_amount', '0'),
+            'user_count': context.get('user_count', '1'),
+            'unit_price': context.get('unit_price', '0'),
+        }
+        
+        # 为其他可能的模板变量提供默认值
+        default_values = {
+            # 基本信息默认值
+            'reg_address': '详见营业执照',
+            'reg_phone': '详见营业执照', 
+            'bank_name': '详见开户许可证',
+            'bank_account': '详见开户许可证',
+            'contact_name': '详见合同',
+            'contact_phone': '详见合同',
+            'mail_address': '详见合同',
+            
+            # 服务期限默认值（当前年度）
+            'service_years': '1',
+            'start_year': str(datetime.now().year),
+            'start_month': str(datetime.now().month),
+            'start_day': str(datetime.now().day),
+            'end_year': str(datetime.now().year + 1),
+            'end_month': str(datetime.now().month),
+            'end_day': str(datetime.now().day),
+            
+            # 费用信息
+            'total_amount_cn': self._number_to_chinese(processed_context['total_amount']),
+            'payment_amount': processed_context['total_amount'],
+            'payment_amount_cn': self._number_to_chinese(processed_context['total_amount']),
+            'tax_rate': '6%',
+            
+            # 发票信息
+            'invoice_type': '普通发票',
+            
+            # 合同相关
+            'contract_types': '续费服务',
+            'second_row': 'false',
+            'table_row_count': '1'
+        }
+        
+        # 合并默认值
+        processed_context.update(default_values)
+        
+        return processed_context
+    
+    def _process_contract_template(self, context: Dict[str, str]) -> Dict[str, str]:
+        """
+        处理合同模板的变量（保持原有逻辑）
+        """
         # 设置固定税率（带百分号）
         context['tax_rate'] = '6%'
         
@@ -69,19 +151,43 @@ class TemplateHandler:
             context['second_row'] = 'true'
         else:
             context['second_row'] = 'false'
-        
-        # 渲染模板
-        self.doc.render(context)
-        
-        # Generate output path if not provided
-        if output_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.splitext(os.path.basename(self.template_path))[0]
-            output_path = f"{filename}_{timestamp}.docx"
+            
+        return context
     
-        # Save the modified document
-        self.doc.save(output_path)
-        return output_path
+    def _number_to_chinese(self, amount_str: str) -> str:
+        """
+        将数字金额转换为中文大写
+        """
+        try:
+            amount = float(amount_str)
+            if amount == 0:
+                return "零元整"
+            
+            # 简化的中文数字转换
+            units = ['', '十', '百', '千', '万']
+            digits = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九']
+            
+            # 处理整数部分
+            integer_part = int(amount)
+            if integer_part == 0:
+                return "零元整"
+            
+            # 简单转换逻辑（适用于常见金额）
+            if integer_part < 10:
+                return f"{digits[integer_part]}元整"
+            elif integer_part < 100:
+                tens = integer_part // 10
+                ones = integer_part % 10
+                if ones == 0:
+                    return f"{digits[tens]}十元整"
+                else:
+                    return f"{digits[tens]}十{digits[ones]}元整"
+            else:
+                # 对于更大的数字，返回简化格式
+                return f"{integer_part}元整"
+                
+        except (ValueError, TypeError):
+            return "零元整"
 
     def get_template_variables(self) -> List[str]:
         """

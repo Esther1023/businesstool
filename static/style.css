@@ -17,24 +17,27 @@
     --pink-color: #ff6b81;
 }
 
-/* 智能计算器样式 */
+/* 到期客户提醒看板样式 */
 .smart-calculator {
-    position: fixed;
-    top: 40px;
-    left: 20px;
-    width: 335px;
-    background-color: var(--card-background);
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-    border-left: 4px solid var(--primary-color);
-    z-index: 1000;
-    font-family: inherit;
+    position: fixed !important;
+    top: 40px !important;
+    left: 20px !important;
+    width: 335px !important;
+    height: 420px !important;
+    background-color: white !important;
+    border-radius: 8px !important;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15) !important;
+    border-left: 4px solid var(--primary-color) !important;
+    z-index: 1000 !important;
+    font-family: inherit !important;
+    overflow: hidden !important;
 }
 
 /* 统一标题横栏样式 */
 .calculator-header,
 .dashboard-header {
-    padding: 8px 15px; /* 减少上下padding，从12px改为8px，保持左右padding不变 */
+    padding: 8px 15px;
+    /* 减少上下padding，从12px改为8px，保持左右padding不变 */
     background-color: var(--secondary-color);
     border-radius: 8px 8px 0 0;
     border-bottom: 1px solid var(--border-color);
@@ -44,15 +47,19 @@
     width: 335px;
     box-sizing: border-box;
     text-align: center;
-    height: 40px; /* 设置固定高度，确保标题栏变窄 */
+    height: 40px;
+    /* 设置固定高度，确保标题栏变窄 */
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .calculator-display {
-    padding: 15px;
-    background-color: var(--background-color);
+    padding: 10px !important;
+    background-color: white !important;
+    height: calc(100% - 50px) !important;
+    overflow-y: auto !important;
+    flex: 1 !important;
 }
 
 .calculator-input {
@@ -133,19 +140,24 @@
     background-color: #f5c6cb !important;
 }
 
+
+
 /* 过期客户提示框样式（已移除） */
 .expiring-customers-alert {
-    display: none; /* 隐藏提醒看板 */
+    display: none;
+    /* 隐藏提醒看板 */
     position: fixed;
     left: 20px;
     bottom: 80px;
     width: 335px;
-    max-height: 130px; /* 减小高度 */
+    max-height: 130px;
+    /* 减小高度 */
     overflow-y: auto;
     background-color: #fff;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-    border-left: 4px solid var(--primary-color); /* 统一颜色风格 */
+    border-left: 4px solid var(--primary-color);
+    /* 统一颜色风格 */
     z-index: 1000;
     font-size: 14px;
 }
@@ -184,6 +196,7 @@
 .expiring-customers-body {
     padding: 8px 15px;
 }
+
 .expiring-customer-item {
     padding: 6px 0;
     border-bottom: 1px solid #f0f0f0;
@@ -195,7 +208,8 @@
 
 .expiring-customer-date {
     font-weight: bold;
-    color: var(--error-color); /* 过期客户日期标红 */
+    color: var(--error-color);
+    /* 过期客户日期标红 */
     font-size: 15px;
     margin-bottom: 2px;
 }
@@ -204,12 +218,17 @@
 .future-expiring-dashboard {
     position: fixed;
     left: 20px;
-    bottom: 20px; /* 固定在底部，保持下面位置不变 */
-    top: auto; /* 取消顶部百分比定位 */
-    transform: none; /* 取消垂直方向移动 */
+    bottom: 20px;
+    /* 固定在底部，保持下面位置不变 */
+    top: auto;
+    /* 取消顶部百分比定位 */
+    transform: none;
+    /* 取消垂直方向移动 */
     width: 335px;
-    max-height: 400px; /* 增加最大高度，使备忘录长度合适 */
-    height: 550px; /* 设置固定高度 */
+    max-height: 400px;
+    /* 增加最大高度，使备忘录长度合适 */
+    height: 550px;
+    /* 设置固定高度 */
     overflow-y: auto;
     background-color: #fff;
     border-radius: 8px;
@@ -293,7 +312,8 @@
     display: table;
 }
 
-.customer-table th, .customer-table td {
+.customer-table th,
+.customer-table td {
     padding: 8px 12px;
     text-align: center;
     border: 1px solid #eee;
@@ -307,7 +327,8 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    display: none; /* 隐藏表头 */
+    display: none;
+    /* 隐藏表头 */
 }
 
 .customer-table tr:nth-child(even) {
@@ -467,7 +488,8 @@ body {
     border-radius: 8px;
     padding: 20px;
     margin-bottom: 20px;
-    grid-column: 1 / -1; /* 占满整行 */
+    grid-column: 1 / -1;
+    /* 占满整行 */
 }
 
 .form-subsection:last-child {
@@ -493,7 +515,8 @@ body {
 
 /* 服务期限组合输入样式 */
 .service-duration-group {
-    grid-column: 1 / -1; /* 占满整行 */
+    grid-column: 1 / -1;
+    /* 占满整行 */
 }
 
 .duration-inputs {
@@ -571,15 +594,20 @@ textarea.form-control {
     min-width: 120px;
     background-color: var(--background-color);
     color: var(--primary-color);
-    border: 1px solid var(--primary-color);
-    padding: 10px 20px;
+    border: 2px solid rgba(230, 193, 125, 0.4);
+    padding: 12px 20px;
     font-size: 15px;
+    border-radius: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(230, 193, 125, 0.1);
 }
 
 .btn-template:hover,
 .btn-template.active {
-    background-color: var(--primary-color);
-    color: white;
+    background: linear-gradient(135deg, #f4d03f 0%, #e6c17d 100%);
+    color: #5d4e37;
+    border-color: rgba(230, 193, 125, 0.6);
+    box-shadow: 0 4px 16px rgba(230, 193, 125, 0.2);
 }
 
 
@@ -592,12 +620,18 @@ textarea.form-control {
 }
 
 .btn-excel {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, #a8d8a8 0%, #7bb87b 100%);
+    color: white;
     margin-left: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(123, 184, 123, 0.2);
 }
 
 .btn-excel:hover {
-    background-color: var(--primary-hover);
+    background: linear-gradient(135deg, #9acc9a 0%, #6da86d 100%);
+    box-shadow: 0 4px 16px rgba(123, 184, 123, 0.3);
 }
 
 .button-group {
@@ -616,12 +650,19 @@ textarea.form-control {
 }
 
 .btn-generate {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, #f4d03f 0%, #e6c17d 100%);
+    color: #5d4e37;
     min-width: 160px;
+    border: 2px solid rgba(230, 193, 125, 0.4);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(230, 193, 125, 0.2);
 }
 
 .btn-generate:hover {
-    background-color: var(--primary-hover);
+    background: linear-gradient(135deg, #f1c40f 0%, #d4b06c 100%);
+    color: #4a3c28;
+    box-shadow: 0 4px 16px rgba(230, 193, 125, 0.3);
 }
 
 .total-amount-group {
@@ -642,7 +683,7 @@ textarea.form-control {
     .user-count-group {
         flex-direction: row;
     }
-    
+
     .user-count-group .form-control {
         max-width: none;
     }
@@ -664,18 +705,22 @@ textarea.form-control {
     display: flex;
     gap: 40px;
     align-items: center;
-    flex-wrap: nowrap;  /* 防止换行 */
-    margin-right: 300px; /* 与右侧快捷按钮保持距离 */
+    flex-wrap: nowrap;
+    /* 防止换行 */
+    margin-right: 300px;
+    /* 与右侧快捷按钮保持距离 */
 }
 
 .input-group .form-control {
     flex: 1;
-    min-width: 300px;  /* 增加最小宽度以显示完整账号 */
+    min-width: 300px;
+    /* 增加最小宽度以显示完整账号 */
 }
 
 .input-group .btn {
     white-space: nowrap;
-    margin: 0;  /* 移除按钮间距 */
+    margin: 0;
+    /* 移除按钮间距 */
 }
 
 .input-group .btn-shortcut {
@@ -703,7 +748,7 @@ textarea.form-control {
     .input-group {
         flex-wrap: wrap;
     }
-    
+
     .input-group .btn {
         flex: 1;
         margin-top: 10px;
@@ -721,7 +766,8 @@ textarea.form-control {
 
 .timeline-container {
     margin-top: 15px;
-    font-size: 14px;    /* 缩小字体大小 */
+    font-size: 14px;
+    /* 缩小字体大小 */
 }
 
 .timeline-item {
@@ -736,14 +782,16 @@ textarea.form-control {
 
 .timeline-item .time {
     color: #666;
-    font-size: 12px;    /* 时间显示更小的字体 */
+    font-size: 12px;
+    /* 时间显示更小的字体 */
     margin-bottom: 5px;
 }
 
 .timeline-item .content {
     white-space: pre-wrap;
     word-break: break-all;
-    font-size: 13px;    /* 内容字体稍微大一点 */
+    font-size: 13px;
+    /* 内容字体稍微大一点 */
     line-height: 1.5;
 }
 
@@ -799,14 +847,15 @@ textarea.form-control {
 }
 
 /* 粉红色文本样式，用于集成模式 */
-.pink-text, .info-row #integrationMode.pink-text {
+.pink-text,
+.info-row #integrationMode.pink-text {
     color: var(--pink-color) !important;
     font-weight: 500;
 }
 
 /* 蓝色文本样式，用于战区名单 - 增强选择器特异性 */
-.blue-text, 
-.info-row #customerClassification.blue-text, 
+.blue-text,
+.info-row #customerClassification.blue-text,
 .customer-info-box .info-row #customerClassification.blue-text {
     color: var(--info-color) !important;
     font-weight: 500;
@@ -820,11 +869,11 @@ textarea.form-control {
     .container {
         padding: 15px;
     }
-    
+
     .card {
         padding: 20px;
     }
-    
+
     .variables-form {
         grid-template-columns: 1fr;
     }
@@ -847,7 +896,7 @@ textarea.form-control {
     .duration-input-item {
         min-width: auto;
     }
-    
+
     .btn {
         width: 100%;
         margin-bottom: 10px;
@@ -857,12 +906,12 @@ textarea.form-control {
         flex-direction: column;
         gap: 12px;
     }
-    
+
     .input-group .form-control,
     .input-group .btn {
         width: 100%;
     }
-    
+
     .invoice-buttons {
         flex-direction: row;
         margin-top: 10px;
@@ -941,19 +990,20 @@ textarea.form-control {
         position: static;
         margin-bottom: 20px;
     }
-    
+
     .btn-shortcut {
         flex: 1;
         text-align: center;
     }
-    
+
     /* 智能表单填充响应式样式 */
     .smart-fill-container {
         flex-direction: column;
         gap: 15px;
     }
-    
-    .ocr-section, .clipboard-section {
+
+    .ocr-section,
+    .clipboard-section {
         flex: none;
     }
 }
@@ -976,6 +1026,7 @@ textarea.form-control {
     gap: 0;
     padding: 0;
 }
+
 .customer-card-item {
     background: transparent;
     border-radius: 0;
@@ -990,19 +1041,24 @@ textarea.form-control {
     line-height: 2.0;
     transition: none;
 }
+
 .customer-card-item:last-child {
     border-bottom: none;
 }
+
 .customer-card-item:hover {
     box-shadow: none;
     background: transparent;
 }
+
 .customer-card-date {
     font-weight: bold;
-    color: var(--error-color); /* 未来客户日期不变，若需标红可改此处 */
+    color: var(--error-color);
+    /* 未来客户日期不变，若需标红可改此处 */
     font-size: 15px;
     margin-bottom: 2px;
 }
+
 .customer-card-account {
     color: #666;
     font-size: 14px;
@@ -1010,6 +1066,7 @@ textarea.form-control {
     word-break: break-all;
     padding: 0;
 }
+
 .customer-card-company {
     color: #333;
     font-size: 14px;
@@ -1017,21 +1074,25 @@ textarea.form-control {
     word-break: break-all;
     padding: 0;
 }
+
 .customer-card-sales {
     color: #333;
     font-size: 14px;
     margin-top: 0;
     margin-bottom: 0px;
-    font-style: normal; /* 未来客户销售名不斜体 */
+    font-style: normal;
+    /* 未来客户销售名不斜体 */
     padding: 0;
 }
+
 .expiring-customer-sales.esther-sales,
 .customer-card-sales.esther-sales {
-    color: #1890ff !important;
+    color: #ff6b81 !important;
     font-style: normal !important;
 }
-.expiring-customer-sales.public-sales,
-.customer-card-sales.public-sales {
+
+.expiring-customer-sales.mia-sales,
+.customer-card-sales.mia-sales {
     color: #1890ff !important;
     font-style: normal !important;
 }
@@ -1042,21 +1103,27 @@ textarea.form-control {
     border-radius: 8px;
     background-color: var(--card-background);
     transition: all 0.3s ease;
-    flex: 1; /* 填满剩余空间 */
+    flex: 1;
+    /* 填满剩余空间 */
     display: flex;
     flex-direction: column;
-    height: 100%; /* 填满整个容器高度 */
+    height: 100%;
+    /* 填满整个容器高度 */
     box-sizing: border-box;
-    min-height: 0; /* 允许flex收缩 */
+    min-height: 0;
+    /* 允许flex收缩 */
 }
 
 .image-upload-area {
-    padding: 30px; /* 与右侧粘贴板保持一致的padding */
+    padding: 30px;
+    /* 与右侧粘贴板保持一致的padding */
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    flex: 1; /* 填满整个容器 */
-    max-width: none; /* 移除最大宽度限制 */
+    flex: 1;
+    /* 填满整个容器 */
+    max-width: none;
+    /* 移除最大宽度限制 */
     margin: 0;
     display: flex;
     align-items: center;
@@ -1142,9 +1209,17 @@ textarea.form-control {
 }
 
 @keyframes progress-animation {
-    0% { width: 0%; }
-    50% { width: 70%; }
-    100% { width: 100%; }
+    0% {
+        width: 0%;
+    }
+
+    50% {
+        width: 70%;
+    }
+
+    100% {
+        width: 100%;
+    }
 }
 
 .progress-text {
@@ -1279,6 +1354,7 @@ textarea.form-control {
         background-color: var(--success-color);
         transform: scale(1.02);
     }
+
     100% {
         background-color: var(--secondary-color);
         transform: scale(1);
@@ -1290,22 +1366,30 @@ textarea.form-control {
     display: flex;
     gap: 20px;
     margin-top: 10px;
-    align-items: stretch; /* 确保两边高度一致 */
-    height: 300px; /* 减小高度，减少占用桌面面积 */
+    align-items: stretch;
+    /* 确保两边高度一致 */
+    height: 300px;
+    /* 减小高度，减少占用桌面面积 */
 }
 
-.ocr-section, .clipboard-section {
-    flex: 1; /* 确保两边宽度完全相等 */
-    width: 50%; /* 明确设置宽度为50% */
-    height: 100%; /* 填满容器高度 */
+.ocr-section,
+.clipboard-section {
+    flex: 1;
+    /* 确保两边宽度完全相等 */
+    width: 50%;
+    /* 明确设置宽度为50% */
+    height: 100%;
+    /* 填满容器高度 */
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 15px;
     background-color: var(--card-background);
-    box-sizing: border-box; /* 确保padding不影响宽度计算 */
+    box-sizing: border-box;
+    /* 确保padding不影响宽度计算 */
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* 防止内容溢出 */
+    overflow: hidden;
+    /* 防止内容溢出 */
 }
 
 /* 自动填充相关样式 */
@@ -1393,34 +1477,44 @@ textarea.form-control {
         transform: translateX(100%);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
     }
 }
+
 .clipboard-container {
     display: flex;
     flex-direction: column;
-    flex: 1; /* 填满剩余空间 */
-    height: 100%; /* 填满整个容器高度 */
-    min-height: 0; /* 允许flex收缩 */
+    flex: 1;
+    /* 填满剩余空间 */
+    height: 100%;
+    /* 填满整个容器高度 */
+    min-height: 0;
+    /* 允许flex收缩 */
     box-sizing: border-box;
 }
 
 .image-upload-container {
     display: flex;
     flex-direction: column;
-    flex: 1; /* 填满剩余空间 */
-    height: 100%; /* 填满整个容器高度 */
-    min-height: 0; /* 允许flex收缩 */
-    box-sizing: border-box; /* 确保padding不影响尺寸计算 */
+    flex: 1;
+    /* 填满剩余空间 */
+    height: 100%;
+    /* 填满整个容器高度 */
+    min-height: 0;
+    /* 允许flex收缩 */
+    box-sizing: border-box;
+    /* 确保padding不影响尺寸计算 */
 }
 
 .clipboard-area {
     position: relative;
     flex: 1;
     height: 100%;
-    min-height: 0; /* 允许flex收缩 */
+    min-height: 0;
+    /* 允许flex收缩 */
 }
 
 .clipboard-content {
@@ -1436,7 +1530,8 @@ textarea.form-control {
     transition: all 0.3s ease;
     height: 100%;
     box-sizing: border-box;
-    min-height: 0; /* 允许flex收缩 */
+    min-height: 0;
+    /* 允许flex收缩 */
 }
 
 .clipboard-content:hover {
@@ -1465,21 +1560,28 @@ textarea.form-control {
 #clipboardTextarea {
     width: 100%;
     height: 100%;
-    padding: 30px; /* 与左侧保持一致的padding */
-    border: 2px dashed var(--border-color); /* 与左侧保持一致的边框样式 */
+    padding: 30px;
+    /* 与左侧保持一致的padding */
+    border: 2px dashed var(--border-color);
+    /* 与左侧保持一致的边框样式 */
     border-radius: 8px;
     font-family: inherit;
     font-size: 14px;
     line-height: 1.5;
-    resize: none; /* 禁用调整大小 */
-    background-color: var(--background-color); /* 与左侧保持一致的背景色 */
+    resize: none;
+    /* 禁用调整大小 */
+    background-color: var(--background-color);
+    /* 与左侧保持一致的背景色 */
     display: none;
     position: absolute;
     top: 0;
     left: 0;
-    box-sizing: border-box; /* 确保padding不影响尺寸计算 */
-    min-height: 0; /* 允许flex收缩 */
-    transition: all 0.3s ease; /* 添加过渡效果 */
+    box-sizing: border-box;
+    /* 确保padding不影响尺寸计算 */
+    min-height: 0;
+    /* 允许flex收缩 */
+    transition: all 0.3s ease;
+    /* 添加过渡效果 */
 }
 
 #clipboardTextarea:focus {
@@ -1524,233 +1626,272 @@ textarea.form-control {
 
 /* —— 悬浮球 + 面板 —— */
 .assist-ball {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--primary-color);
-  color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.18);
-  cursor: pointer;
-  z-index: 10000;
-  user-select: none;
-  transition: transform .15s ease, background .2s ease;
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    z-index: 10000;
+    user-select: none;
+    transition: transform .15s ease, background .2s ease;
 }
-.assist-ball:hover { background: var(--primary-hover); transform: translateY(-1px); }
+
+.assist-ball:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+}
 
 .assist-panel {
-  position: fixed;
-  right: 20px;
-  bottom: 86px;
-  width: 380px;
-  background: #fff;
-  border: 1px solid var(--border-color);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
-  border-radius: 12px;
-  overflow: hidden;
-  z-index: 10000;
-  display: none;
+    position: fixed;
+    right: 20px;
+    bottom: 86px;
+    width: 380px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+    border-radius: 12px;
+    overflow: hidden;
+    z-index: 10000;
+    display: none;
 }
-.assist-panel.open { display: block; }
+
+.assist-panel.open {
+    display: block;
+}
+
 .assist-panel-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 15px; background: var(--primary-color);
-  color: #fff;
-  font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
 }
-.assist-panel-body { padding: 15px; display: flex; flex-direction: column; gap: 12px; }
-.assist-row { display: flex; gap: 8px; flex-direction: row; }
+
+.assist-panel-body {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.assist-row {
+    display: flex;
+    gap: 8px;
+    flex-direction: row;
+}
 
 /* 合同和开票按钮特定样式 - 强制水平排列 */
-.assist-panel-body > .assist-row:first-of-type {
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 12px !important;
-  width: 50% !important;
+.assist-panel-body>.assist-row:first-of-type {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 12px !important;
+    width: 50% !important;
 }
 
-.assist-row .btn { 
-  flex: 1;
-  min-width: auto; 
-  padding: 10px 12px;
-  background: var(--primary-color);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+.assist-row .btn {
+    flex: 1;
+    min-width: auto;
+    padding: 10px 12px;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
 
 /* 合同和开票按钮特定样式 */
 .assist-panel-body {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
 }
 
 /* 第一个assist-row容器 */
-.assist-panel-body > .assist-row:first-of-type {
-  display: flex !important;
-  flex-direction: row !important;
-  width: 50% !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  gap: 8px !important;
+.assist-panel-body>.assist-row:first-of-type {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 50% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 8px !important;
 }
 
 /* 合同按钮 */
-.assist-panel-body > .assist-row:first-of-type > #btnStageContract {
-  flex: 1 !important;
-  width: calc(50% - 10px) !important;
-  min-width: calc(50% - 10px) !important;
-  max-width: calc(50% - 10px) !important;
-  padding: 10px 85px !important;
-  text-align: center !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  white-space: nowrap !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 0 !important;
+.assist-panel-body>.assist-row:first-of-type>#btnStageContract {
+    flex: 1 !important;
+    width: calc(50% - 10px) !important;
+    min-width: calc(50% - 10px) !important;
+    max-width: calc(50% - 10px) !important;
+    padding: 10px 85px !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
 }
 
 /* 开票按钮 */
-.assist-panel-body > .assist-row:first-of-type > #btnStageInvoice {
-  flex: 1 !important;
-  width: 50% !important;
-  min-width: 50% !important;
-  max-width: 50% !important;
-  padding: 10px 85px !important;
-  text-align: center !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
-  white-space: nowrap !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin: 0 !important;
+.assist-panel-body>.assist-row:first-of-type>#btnStageInvoice {
+    flex: 1 !important;
+    width: 50% !important;
+    min-width: 50% !important;
+    max-width: 50% !important;
+    padding: 10px 85px !important;
+    text-align: center !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
 }
 
 /* 确保按钮内容可见 */
-.assist-panel-body > .assist-row:first-of-type > #btnStageContract *, 
-.assist-panel-body > .assist-row:first-of-type > #btnStageInvoice * {
-  opacity: 1 !important;
-  visibility: visible !important;
+.assist-panel-body>.assist-row:first-of-type>#btnStageContract *,
+.assist-panel-body>.assist-row:first-of-type>#btnStageInvoice * {
+    opacity: 1 !important;
+    visibility: visible !important;
 }
+
 .assist-row .btn:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
+    background: var(--primary-hover);
+    transform: translateY(-1px);
 }
+
 .assist-row .btn.btn-secondary {
-  background: var(--medium-gray);
-  color: #666;
+    background: var(--medium-gray);
+    color: #666;
 }
+
 .assist-row .btn.btn-secondary:hover {
-  background: var(--dark-gray);
-  color: #fff;
+    background: var(--dark-gray);
+    color: #fff;
 }
-.assist-input { 
-  width: 100%; 
-  border: 1px solid var(--border-color); 
-  border-radius: 6px; 
-  padding: 10px 12px;
-  font-size: 13px;
-  transition: border-color 0.2s ease;
+
+.assist-input {
+    width: 100%;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    transition: border-color 0.2s ease;
 }
+
 .assist-input:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(230, 193, 125, 0.2);
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(230, 193, 125, 0.2);
 }
-.assist-note { height: 76px; resize: vertical; }
-.assist-help { font-size: 12px; color: var(--dark-gray); line-height: 1.4; }
+
+.assist-note {
+    height: 76px;
+    resize: vertical;
+}
+
+.assist-help {
+    font-size: 12px;
+    color: var(--dark-gray);
+    line-height: 1.4;
+}
 
 /* 悬浮球未签订合同客户样式 */
 .assist-unsigned {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--card-background);
-  overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-background);
+    overflow: hidden;
 }
 
 .unsigned-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: var(--secondary-color);
-  border-radius: 6px;
-  margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--secondary-color);
+    border-radius: 6px;
+    margin-bottom: 8px;
 }
 
 .unsigned-header h4 {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-color);
-  font-weight: 600;
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-color);
+    font-weight: 600;
 }
 
 .unsigned-body {
-  padding: 8px 12px;
-  background: var(--background-color);
-  border-bottom: 1px solid var(--border-color);
+    padding: 8px 12px;
+    background: var(--background-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .unsigned-list {
-  max-height: 200px;
-  overflow-y: auto;
-  background: #fafafa;
-  margin-top: 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
+    max-height: 200px;
+    overflow-y: auto;
+    background: #fafafa;
+    margin-top: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
 }
 
 .filter-container {
-  margin-bottom: 8px;
+    margin-bottom: 8px;
 }
 
 .unsigned-list::-webkit-scrollbar {
-  width: 4px;
+    width: 4px;
 }
 
 .unsigned-list::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 2px;
+    background: #f1f1f1;
+    border-radius: 2px;
 }
 
 .unsigned-list::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 2px;
+    background: #c1c1c1;
+    border-radius: 2px;
 }
 
 .unsigned-list::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+    background: #a8a8a8;
 }
 
 .btn-refresh {
-  padding: 4px 8px;
-  font-size: 11px;
-  min-width: auto;
-  background: var(--primary-color);
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+    padding: 4px 8px;
+    font-size: 11px;
+    min-width: auto;
+    background: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
+
 .btn-refresh:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
+    background: var(--primary-hover);
+    transform: translateY(-1px);
 }
 
 /* 未签订合同客户显示样式 */
@@ -1784,15 +1925,18 @@ textarea.form-control {
 
 /* 新添加的状态样式 */
 .stage-invalid {
-    color: #6c757d; /* 灰色表示无效 */
+    color: #6c757d;
+    /* 灰色表示无效 */
 }
 
 .stage-upsell {
-    color: #28a745; /* 绿色表示增购 */
+    color: #28a745;
+    /* 绿色表示增购 */
 }
 
 .stage-lost {
-    color: #dc3545; /* 红色表示失联 */
+    color: #dc3545;
+    /* 红色表示失联 */
 }
 
 /* 状态筛选器样式 */
@@ -2019,6 +2163,7 @@ textarea.form-control {
         opacity: 0;
         transform: scale(0.9);
     }
+
     to {
         opacity: 1;
         transform: scale(1);
@@ -2059,4 +2204,261 @@ textarea.form-control {
     font-size: 14px !important;
     font-weight: 500 !important;
     margin-left: 4px !important;
+}
+
+/* 日历
+时间显示样式 */
+.assist-calendar {
+    margin-bottom: 20px;
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    color: var(--text-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.calendar-date {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--dark-gray);
+    letter-spacing: 0.5px;
+}
+
+.calendar-time {
+    font-size: 36px;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    margin: 5px 0;
+}
+
+.calendar-revenue {
+    display: none;
+    /* 隐藏收款金额显示 */
+}
+
+.calendar-revenue span {
+    font-weight: bold;
+    color: #ffd700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* 金额输入框与按钮的组合布局 */
+.amount-with-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.amount-with-buttons .form-control {
+    flex: 1;
+    min-width: 200px;
+}
+
+.inline-buttons {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 12px;
+}
+
+/* 三按钮布局容器（保留作为备用） */
+.action-buttons-container {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+    margin: 30px 0;
+    padding: 25px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+/* 按钮基础样式 */
+.action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+    width: 120px;
+    min-height: 48px;
+    height: 48px;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(10px);
+    text-decoration: none;
+}
+
+.action-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s;
+}
+
+.action-btn:hover::before {
+    left: 100%;
+}
+
+.action-btn:hover {
+    transform: translateY(-2px);
+}
+
+.action-btn:active {
+    transform: translateY(-2px) scale(0.98);
+    transition: all 0.1s;
+}
+
+
+
+/* 填充测试数据按钮 - 柔和蓝灰色主题 */
+.action-btn.btn-secondary {
+    background: linear-gradient(135deg, #b8c5e0 0%, #8a9bc4 100%);
+    color: #4a5568;
+    border: 2px solid rgba(138, 155, 196, 0.3);
+    box-shadow: 0 3px 12px rgba(138, 155, 196, 0.25);
+}
+
+.action-btn.btn-secondary:hover {
+    background: linear-gradient(135deg, #a8b8d8 0%, #7b8ab8 100%);
+    color: #3a4553;
+    box-shadow: 0 6px 20px rgba(138, 155, 196, 0.35);
+    transform: translateY(-1px);
+}
+
+/* 生成报价单按钮 - 柔和金橙色主题，与页面主色调协调 */
+.action-btn.btn-quote {
+    background: linear-gradient(135deg, #f0d060 0%, #e6c17d 100%);
+    color: #5d4e37;
+    border: 2px solid rgba(230, 193, 125, 0.3);
+    box-shadow: 0 3px 12px rgba(230, 193, 125, 0.25);
+}
+
+.action-btn.btn-quote:hover {
+    background: linear-gradient(135deg, #ecc94b 0%, #d4b06c 100%);
+    color: #4a3c28;
+    box-shadow: 0 6px 20px rgba(230, 193, 125, 0.35);
+    transform: translateY(-1px);
+}
+
+/* 生成合同按钮 - 柔和绿色主题 */
+.action-btn.btn-primary {
+    background: linear-gradient(135deg, #b8d8b8 0%, #8ab88a 100%);
+    color: #2d5a2d;
+    border: 2px solid rgba(138, 184, 138, 0.3);
+    box-shadow: 0 3px 12px rgba(138, 184, 138, 0.25);
+}
+
+.action-btn.btn-primary:hover {
+    background: linear-gradient(135deg, #a8d8a8 0%, #7bb87b 100%);
+    color: #1e4a1e;
+    box-shadow: 0 6px 20px rgba(138, 184, 138, 0.35);
+    transform: translateY(-1px);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .action-buttons-container {
+        flex-direction: column;
+        gap: 16px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+    
+    .action-btn {
+        min-width: 100%;
+        min-height: 80px;
+        flex-direction: row;
+        padding: 16px 20px;
+    }
+    
+
+}
+
+@media (max-width: 480px) {
+    .action-buttons-container {
+        padding: 16px;
+        margin: 16px 0;
+        gap: 12px;
+    }
+    
+    .action-btn {
+        min-height: 70px;
+        padding: 14px 16px;
+    }
+    
+
+}
+
+/* 平板设备适配 */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .action-buttons-container {
+        gap: 16px;
+        padding: 22px;
+    }
+    
+    .action-btn {
+        min-width: 120px;
+        min-height: 90px;
+        padding: 18px 14px;
+    }
+    
+
+}
+
+/* 重新定义日历样式 - 简洁风格 */
+.assist-calendar {
+    margin-bottom: 20px !important;
+    background: var(--card-background) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: 8px !important;
+    padding: 12px 15px !important;
+    text-align: center !important;
+    color: var(--text-color) !important;
+}
+
+.calendar-display {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 4px !important;
+}
+
+.calendar-date {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: var(--text-color) !important;
+    letter-spacing: 0.5px !important;
+    margin: 0 !important;
+}
+
+.calendar-time {
+    display: none !important;
+    /* 隐藏时间显示 */
 }

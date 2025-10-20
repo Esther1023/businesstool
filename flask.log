@@ -1,0 +1,180 @@
+INFO:ocr_service_optimized:完整OCR库导入成功
+INFO:__main__:优化OCR服务导入成功
+/Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/.venv/lib/python3.13/site-packages/docxcompose/properties.py:18: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+INFO:__main__:OCR服务初始化成功
+INFO:__main__:模板处理器类可用
+INFO:__main__:状态管理器初始化成功
+INFO:__main__:应用启动时自动启动后台监控成功
+ * Serving Flask app '__main__'
+ * Debug mode: on
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://localhost:8081
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+INFO:ocr_service_optimized:完整OCR库导入成功
+INFO:__main__:优化OCR服务导入成功
+/Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/.venv/lib/python3.13/site-packages/docxcompose/properties.py:18: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+INFO:__main__:OCR服务初始化成功
+INFO:__main__:模板处理器类可用
+INFO:__main__:状态管理器初始化成功
+INFO:__main__:应用启动时自动启动后台监控成功
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:04] "GET /?ide_webview_request_time=1760607255864 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:04] "GET /static/script.js HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:05] "GET /static/style.css HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:05] "GET /get_last_import_time HTTP/1.1" 200 -
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:05] "GET /get_monitor_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:05] "[33mGET /@vite/client HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:11] "[32mGET /get_monthly_revenue HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:17] "GET /?ide_webview_request_time=1760612717810 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:17] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:17] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:17] "GET /get_last_import_time HTTP/1.1" 200 -
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:17] "GET /get_monitor_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:17] "[33mGET /@vite/client HTTP/1.1[0m" 404 -
+INFO:__main__:开始解析文本，长度: 24 字符
+INFO:__main__:实际文本内容: '5f9b840c92614e00069c8d5d'
+INFO:ocr_service_optimized:开始文本整理和重构
+INFO:ocr_service_optimized:未找到有效的电话号码
+INFO:ocr_service_optimized:银行模式 1: 开户行及账号[：:\s]*([^\d\n\r]*?中国银行[^\d\n\r]*?支行)
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 2: 开户行及账号[：:\s]*([^\d\n\r]*?银行[^\d\n\r]*?(?:支行|分行|营业部))
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 3: 开户行[：:\s]*([^\d\n\r]*?银行[^\d\n\r]*?(?:支行|分行|营业部))
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 4: 开户银行[：:\s]*([^\d\n\r]*?银行[^\d\n\r]*?(?:支行|分行|营业部))
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 5: (中国银行[^\d\n\r]*?(?:支行|分行|营业部))
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 6: ([^\d\n\r]*?(?:中国银行|工商银行|农业银行|建设银行|交通银行|招商银行)[^\d\n\r]*?(?:支行|分行|营业部))
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 7: ([^\d\n\r]*?银行[^\d\n\r]*?(?:支行|分行|营业部))
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 8: ([^\d\n\r]*?(?:农业银行|工商银行|建设银行|中国银行|交通银行|招商银行)[^\d\n\r]*)
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:银行模式 9: ([^\d\n\r]*?(?:信用社|信用合作联社)[^\d\n\r]*)
+INFO:ocr_service_optimized:匹配结果: []
+INFO:ocr_service_optimized:❌ 所有银行模式都没有匹配成功
+INFO:ocr_service_optimized:整理后文本: 税号：9B840C92614E00069C
+INFO:ocr_service_optimized:字段匹配成功: 税号 -> tax_number = 9B840C92614E00069C
+INFO:ocr_service_optimized:当前识别结果: {'tax_number': '9B840C92614E00069C'}
+INFO:ocr_service_optimized:重要字段: ['company_name', 'tax_number', 'reg_address', 'bank_name', 'bank_account']
+INFO:ocr_service_optimized:缺失字段: ['company_name', 'reg_address', 'bank_name', 'bank_account']
+INFO:ocr_service_optimized:识别字段数量: 1
+INFO:ocr_service_optimized:是否需要智能识别: True
+INFO:ocr_service_optimized:使用智能识别补充缺失字段: ['company_name', 'reg_address', 'bank_name', 'bank_account']
+INFO:ocr_service_optimized:开始智能内容识别，已有字段: ['tax_number']
+INFO:ocr_service_optimized:开始地址识别，已使用内容: {'9B840C92614E00069C'}
+INFO:ocr_service_optimized:地址模式 1 匹配结果: []
+INFO:ocr_service_optimized:地址模式 2 匹配结果: []
+INFO:ocr_service_optimized:地址模式 3 匹配结果: []
+INFO:ocr_service_optimized:地址模式 4 匹配结果: []
+INFO:ocr_service_optimized:地址模式 5 匹配结果: []
+INFO:ocr_service_optimized:地址模式 6 匹配结果: []
+INFO:ocr_service_optimized:地址模式 7 匹配结果: []
+INFO:ocr_service_optimized:地址模式 8 匹配结果: []
+INFO:ocr_service_optimized:地址模式 9 匹配结果: []
+INFO:ocr_service_optimized:地址模式 10 匹配结果: []
+INFO:ocr_service_optimized:地址模式 11 匹配结果: []
+INFO:ocr_service_optimized:未找到有效的手机号码
+INFO:__main__:文本解析成功，识别到 1 个字段，1 个警告
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:05:21] "POST /parse_text HTTP/1.1" 200 -
+INFO:__main__:开始通过简道云账号查询: 5f9b840c92614e00069c8d5d
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "GET /?ide_webview_request_time=1760612717810 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "GET /?ide_webview_request_time=1760612717810 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "GET /get_last_import_time HTTP/1.1" 200 -
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "GET /get_monitor_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:01] "[33mGET /@vite/client HTTP/1.1[0m" 404 -
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:本月收款总金额: 235560.0元
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:未找到匹配的客户信息，查询简道云账号: 5f9b840c92614e00069c8d5d
+INFO:__main__:本月收款总金额: 235560.0元
+INFO:__main__:本月收款总金额: 235560.0元
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:12] "[33mPOST /query_customer HTTP/1.1[0m" 404 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:12] "GET /get_monthly_revenue HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:13] "GET /get_monthly_revenue HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:13] "GET /get_monthly_revenue HTTP/1.1" 200 -
+INFO:__main__:找到5个即将过期的客户
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:13] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:__main__:找到5个即将过期的客户
+INFO:__main__:找到5个即将过期的客户
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:__main__:找到5个即将过期的客户
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:__main__:找到5个即将过期的客户
+INFO:__main__:找到131个未来30天内的客户（筛选条件: na）
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_unsigned_customers?status=na HTTP/1.1" 200 -
+INFO:__main__:找到131个未来30天内的客户（筛选条件: na）
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_unsigned_customers?status=na HTTP/1.1" 200 -
+INFO:__main__:找到131个未来30天内的客户（筛选条件: na）
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:14] "GET /get_unsigned_customers?status=na HTTP/1.1" 200 -
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:找到5个即将过期的客户
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:06:15] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:07:51] "GET /health HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:07:59] "[32mGET /get_monthly_revenue HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:04] "[32mGET /get_expiring_customers HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:10] "[32mGET /get_unsigned_customers HTTP/1.1[0m" 302 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:26] "GET /?ide_webview_request_time=1760612906086 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:26] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:26] "[36mGET /static/script.js HTTP/1.1[0m" 304 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:26] "GET /get_last_import_time HTTP/1.1" 200 -
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:26] "GET /get_monitor_status HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:26] "[33mGET /@vite/client HTTP/1.1[0m" 404 -
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:本月收款总金额: 235560.0元
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:28] "GET /get_monthly_revenue HTTP/1.1" 200 -
+INFO:__main__:找到5个即将过期的客户
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:28] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:__main__:尝试读取文件: /Users/esther/Library/Mobile Documents/com~apple~CloudDocs/businesstool/六大战区简道云客户.xlsx
+INFO:__main__:找到131个未来30天内的客户（筛选条件: na）
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:28] "GET /get_unsigned_customers?status=na HTTP/1.1" 200 -
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:工作日，提醒明天到期的客户
+INFO:__main__:找到5个即将过期的客户
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:08:28] "GET /get_expiring_customers HTTP/1.1" 200 -
+INFO:__main__:开始通过简道云账号查询: 6040492b80e9de2aa1d3b730
+INFO:__main__:成功读取Excel文件，共4393行数据
+INFO:__main__:处理客户数据: 6040492b80e9de2aa1d3b730, 账号-企业名称: 霞浦县实验幼儿园1, 集成模式: dingtalk, 客户分类: 战区非Name名单, 续费责任销售: Mia.Mi, 责任销售中英文: nan, 简道云销售: nan
+INFO:__main__:到期日期: 2025年10月17日
+INFO:__main__:应续ARR: 6600.0元
+INFO:__main__:查询成功，找到1条匹配记录
+INFO:werkzeug:127.0.0.1 - - [16/Oct/2025 19:15:39] "POST /query_customer HTTP/1.1" 200 -
+/opt/homebrew/Cellar/python@3.13/3.13.3/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/resource_tracker.py:301: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-1w4nhzpz'}
+  warnings.warn(

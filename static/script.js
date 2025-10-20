@@ -1,7 +1,40 @@
-// 提醒看板已被移除
+// 全局变量声明
+let isMonitoring = false;
+
+// 获取即将到期的客户并显示提醒看板
 function fetchExpiringCustomers() {
-    // 此函数已被简化，不再显示提醒看板
-    console.log('提醒看板功能已被移除');
+    fetch('/get_expiring_customers', {
+        credentials: 'same-origin'
+    })
+        .then(response => {
+            if (response.status === 302 || response.url.includes('/login')) {
+                console.log('需要登录才能获取到期客户数据');
+                return null;
+            }
+            const contentType = response.headers.get('content-type');
+            if (!response.ok || !contentType || !contentType.includes('application/json')) {
+                throw new Error('获取到期客户数据失败');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+            
+            if (data.error) {
+                console.error('获取到期客户失败:', data.error);
+                return;
+            }
+            
+            if (data.expiring_customers && data.expiring_customers.length > 0) {
+                showExpiringCustomersAlert(data.expiring_customers, data.reminder_type, data.today_date);
+            } else if (data.message) {
+                // 如果没有到期客户但有消息，也显示提醒看板
+                showExpiringCustomersAlert([], data.reminder_type, data.today_date, data.message);
+            }
+        })
+        .catch(error => {
+            console.error('获取到期客户失败:', error);
+        });
 }
 
 // 快捷按钮链接配置
@@ -46,11 +79,133 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+    
+    // 检查用户是否已登录（通过检查页面上的元素判断）
+    if (document.getElementById('contractForm')) {
+        console.log('页面已加载，开始初始化...');
+        
+        // 立即创建到期客户提醒看板
+        createExpiringCustomersReminder();
+        
+        // 延迟显示备忘录白板
+        setTimeout(() => {
+            if (typeof showFutureExpiringCustomersDashboard === 'function') {
+                showFutureExpiringCustomersDashboard([], []);
+            }
+        }, 500);
+    }
 });
 
-// 提醒看板已被移除，此函数不再使用
-function showExpiringCustomersAlert() {
-    console.log('提醒看板功能已被移除');
+// 显示即将到期客户提醒看板（替代计算器）
+function showExpiringCustomersAlert(customers, reminderType, todayDate, message) {
+    customers = customers || [];
+    reminderType = reminderType || '';
+    todayDate = todayDate || '';
+    message = message || '';
+    
+    // 检查是否已存在提醒看板，如果存在则移除
+    const existingAlert = document.getElementById('smart-calculator');
+    if (existingAlert) {
+        existingAlert.remove();
+    }
+
+    // 创建提醒看板容器（使用计算器的ID和样式）
+    const alertContainer = document.createElement('div');
+    alertContainer.id = 'smart-calculator';
+    alertContainer.className = 'smart-calculator';
+
+    // 创建标题栏
+    const alertHeader = document.createElement('div');
+    alertHeader.className = 'calculator-header';
+    
+    const titleSpan = document.createElement('span');
+    titleSpan.textContent = '📅 到期客户提醒';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'close-btn';
+    closeBtn.textContent = '×';
+    closeBtn.style.background = 'none';
+    closeBtn.style.border = 'none';
+    closeBtn.style.color = '#fff';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.fontSize = '18px';
+    closeBtn.style.marginLeft = 'auto';
+    
+    alertHeader.appendChild(titleSpan);
+    alertHeader.appendChild(closeBtn);
+    alertHeader.style.display = 'flex';
+    alertHeader.style.justifyContent = 'space-between';
+    alertHeader.style.alignItems = 'center';
+
+    // 创建内容区域
+    const alertContent = document.createElement('div');
+    alertContent.className = 'calculator-display';
+    alertContent.style.padding = '15px';
+    alertContent.style.maxHeight = '400px';
+    alertContent.style.overflowY = 'auto';
+
+    // 移除日期和类型信息显示
+
+    if (customers.length > 0) {
+        // 显示到期客户列表
+        const customersList = document.createElement('div');
+        customersList.style.fontSize = '13px';
+        
+        customers.forEach(function(customer) {
+            const customerItem = document.createElement('div');
+            customerItem.style.padding = '8px 0';
+            customerItem.style.borderBottom = '1px solid #f0f0f0';
+            
+            const dateDiv = document.createElement('div');
+            dateDiv.style.fontWeight = 'bold';
+            dateDiv.style.color = '#f5222d';
+            dateDiv.style.marginBottom = '3px';
+            dateDiv.textContent = customer.expiry_date || '';
+            
+            const accountDiv = document.createElement('div');
+            accountDiv.style.color = '#666';
+            accountDiv.style.marginBottom = '2px';
+            accountDiv.textContent = '账号：' + (customer.jdy_account || '');
+            
+            const companyDiv = document.createElement('div');
+            companyDiv.style.color = '#333';
+            companyDiv.style.marginBottom = '2px';
+            companyDiv.textContent = customer.company_name || '';
+            
+            const salesDiv = document.createElement('div');
+            salesDiv.style.color = '#333';
+            salesDiv.style.fontSize = '12px';
+            salesDiv.textContent = '销售：' + (customer.sales_person || '');
+            
+            customerItem.appendChild(dateDiv);
+            customerItem.appendChild(accountDiv);
+            customerItem.appendChild(companyDiv);
+            customerItem.appendChild(salesDiv);
+            
+            customersList.appendChild(customerItem);
+        });
+        
+        alertContent.appendChild(customersList);
+    } else if (message) {
+        // 显示无到期客户的消息
+        const messageDiv = document.createElement('div');
+        messageDiv.style.textAlign = 'center';
+        messageDiv.style.padding = '20px';
+        messageDiv.style.color = '#52c41a';
+        messageDiv.style.fontSize = '16px';
+        messageDiv.textContent = message;
+        alertContent.appendChild(messageDiv);
+    }
+
+    // 组装提醒看板
+    alertContainer.appendChild(alertHeader);
+    alertContainer.appendChild(alertContent);
+    document.body.appendChild(alertContainer);
+
+    // 添加关闭按钮事件
+    closeBtn.addEventListener('click', function() {
+        alertContainer.remove();
+    });
 }
 
 // 创建备忘录白板（替代原来的25-30天到期客户看板）
@@ -136,12 +291,15 @@ function showFutureExpiringCustomersDashboard(estherCustomers, otherCustomers) {
 document.addEventListener('DOMContentLoaded', function() {
     // 检查用户是否已登录（通过检查页面上的元素判断）
     if (document.getElementById('contractForm')) {
-        // 延迟调用，确保页面完全加载
+        console.log('页面已加载，开始初始化...');
+        
+        // 立即创建到期客户提醒看板
+        createExpiringCustomersReminder();
+        
+        // 延迟显示备忘录白板
         setTimeout(() => {
-            fetchExpiringCustomers();
-            // 显示备忘录白板（替代原来的25-30天到期客户看板）
             showFutureExpiringCustomersDashboard([], []);
-        }, 1000);
+        }, 500);
     }
     
     // 智能表单填充功能
@@ -652,11 +810,19 @@ function showOrderProcessTip(mode) {
             </div>
         `;
         tipElement.style.display = 'block';
-    } else if (modeText.includes('钉钉')) {
+    } else if (modeText.includes('钉钉') && !modeText.includes('内置')) {
         tipElement.innerHTML = `
             <div class="tip-content">
                 <strong>⚠️</strong>
                 <p class="integration-tip-text">直接在钉钉后台下单</p>
+            </div>
+        `;
+        tipElement.style.display = 'block';
+    } else if (modeText.includes('内置')) {
+        tipElement.innerHTML = `
+            <div class="tip-content">
+                <strong>💡</strong>
+                <p class="integration-tip-text">简道眼下单</p>
             </div>
         `;
         tipElement.style.display = 'block';
@@ -692,55 +858,93 @@ function queryCustomer() {
             return;
         }
         
-        // 更新表单字段
-        if (data.company_name && data.company_name !== 'nan') {
-            document.querySelector('[name="company_name"]').value = data.company_name;
-        }
-        if (data.tax_number && data.tax_number !== 'nan') {
-            document.querySelector('[name="tax_number"]').value = data.tax_number;
+        // 检查是否有查询结果
+        if (!data.results || data.results.length === 0) {
+            alert('未找到客户信息');
+            return;
         }
         
-        // 更新显示内容
-        document.getElementById('accountEnterpriseName').textContent = data.account_enterprise_name || '暂无数据';
-        const integrationMode = data.integration_mode || '暂无数据';
-        document.getElementById('integrationMode').textContent = integrationMode;
-        document.getElementById('expiryDate').textContent = data.expiry_date || '暂无数据';
-        document.getElementById('uidArr').textContent = data.uid_arr || '0元';
+        // 取第一条结果（通常只有一条）
+        const customerData = data.results[0];
+        
+        // 更新表单字段
+        if (customerData.company_name && customerData.company_name !== 'nan') {
+            document.querySelector('[name="company_name"]').value = customerData.company_name;
+        }
+        if (customerData.tax_number && customerData.tax_number !== 'nan') {
+            document.querySelector('[name="tax_number"]').value = customerData.tax_number;
+        }
+        
+        // 更新显示内容 - 添加null检查
+        const accountEnterpriseNameElement = document.getElementById('accountEnterpriseName');
+        if (accountEnterpriseNameElement) {
+            accountEnterpriseNameElement.textContent = customerData.account_enterprise_name || '暂无数据';
+        }
+        
+        const integrationMode = customerData.integration_mode || '暂无数据';
+        const integrationModeElement = document.getElementById('integrationMode');
+        if (integrationModeElement) {
+            integrationModeElement.textContent = integrationMode;
+        }
+        
+        const expiryDateElement = document.getElementById('expiryDate');
+        if (expiryDateElement) {
+            expiryDateElement.textContent = customerData.expiry_date || '暂无数据';
+        }
+        
+        const uidArrElement = document.getElementById('uidArr');
+        if (uidArrElement) {
+            uidArrElement.textContent = customerData.uid_arr || '0元';
+        }
         
         // 设置客户分类并处理战区名单的样式
         const customerClassification = document.getElementById('customerClassification');
-        const classificationText = data.customer_classification || '暂无数据';
+        const classificationText = customerData.customer_classification || '暂无数据';
         
-        // 检查是否是精确的"战区Name名单"
-        if (classificationText === '战区Name名单') {
-            // 移除可能存在的其他样式类
-            customerClassification.classList.remove('pink-text', 'blue-text');
-            
-            // 直接设置内联样式，使用!important确保优先级
-            customerClassification.style.color = '#1890ff !important'; // 明显的蓝色
-            customerClassification.style.fontWeight = '500';
-            customerClassification.style.padding = '2px 6px';
-            customerClassification.style.borderRadius = '4px';
-            customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
-            
-            // 设置文本内容并添加提醒
-            customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
-        } else {
-            // 重置所有样式
-            customerClassification.classList.remove('pink-text', 'blue-text');
-            customerClassification.style.color = '';
-            customerClassification.style.fontWeight = '';
-            customerClassification.style.padding = '';
-            customerClassification.style.borderRadius = '';
-            customerClassification.style.backgroundColor = '';
-            
-            // 只显示原始文本，不添加提醒
-            customerClassification.textContent = classificationText;
+        if (customerClassification) {
+            // 检查是否是精确的"战区Name名单"
+            if (classificationText === '战区Name名单') {
+                // 移除可能存在的其他样式类
+                customerClassification.classList.remove('pink-text', 'blue-text');
+                
+                // 直接设置内联样式，使用!important确保优先级
+                customerClassification.style.color = '#1890ff !important'; // 明显的蓝色
+                customerClassification.style.fontWeight = '500';
+                customerClassification.style.padding = '2px 6px';
+                customerClassification.style.borderRadius = '4px';
+                customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
+                
+                // 设置文本内容并添加提醒
+                customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
+            } else {
+                // 重置所有样式
+                customerClassification.classList.remove('pink-text', 'blue-text');
+                customerClassification.style.color = '';
+                customerClassification.style.fontWeight = '';
+                customerClassification.style.padding = '';
+                customerClassification.style.borderRadius = '';
+                customerClassification.style.backgroundColor = '';
+                
+                // 只显示原始文本，不添加提醒
+                customerClassification.textContent = classificationText;
+            }
         }
         
-        document.getElementById('salesPerson').textContent = data.sales || '暂无数据';
-        document.getElementById('salesCnEn').textContent = data.sales_cn_en || '暂无数据';
-        document.getElementById('jdySales').textContent = data.jdy_sales || '暂无数据';
+        const salesPersonElement = document.getElementById('salesPerson');
+        if (salesPersonElement) {
+            salesPersonElement.textContent = customerData.sales || '暂无数据';
+        }
+        
+        // 安全设置可选元素的内容
+        const salesCnEnElement = document.getElementById('salesCnEn');
+        if (salesCnEnElement) {
+            salesCnEnElement.textContent = customerData.sales_cn_en || '暂无数据';
+        }
+        
+        const jdySalesElement = document.getElementById('jdySales');
+        if (jdySalesElement) {
+            jdySalesElement.textContent = customerData.jdy_sales || '暂无数据';
+        }
         
         // 显示结果区域
         document.getElementById('customerInfo').style.display = 'block';
@@ -754,159 +958,139 @@ function queryCustomer() {
     });
 }
 
-// 创建智能计算器
-function createSmartCalculator() {
-    // 检查是否已存在计算器，如果存在则移除
-    const existingCalculator = document.getElementById('smart-calculator');
-    if (existingCalculator) {
-        existingCalculator.remove();
+// 第一个函数已删除，使用文件末尾的完整版本
+
+// 加载节假日到期客户数据
+function loadHolidayExpiringCustomers(contentContainer) {
+    // 显示加载状态
+    contentContainer.innerHTML = `
+        <div style="text-align: center; color: #666; padding: 20px;">
+            📅 正在加载到期提醒...
+        </div>
+    `;
+
+    // 调用后端API获取到期客户数据
+    fetch('/get_expiring_customers')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('网络请求失败');
+            }
+            return response.json();
+        })
+        .then(data => {
+            displayHolidayReminder(contentContainer, data);
+        })
+        .catch(error => {
+            console.error('获取到期客户数据失败:', error);
+            contentContainer.innerHTML = `
+                <div style="text-align: center; color: #f5222d; padding: 20px;">
+                    ❌ 加载失败<br>
+                    <small style="color: #666;">点击标题重试</small>
+                </div>
+            `;
+        });
+}
+
+// 显示节假日提醒内容
+function displayHolidayReminder(container, data) {
+    let html = '';
+
+    if (data.error) {
+        html = `
+            <div style="text-align: center; color: #f5222d; padding: 20px;">
+                ❌ ${data.error}<br>
+                <small style="color: #666;">点击标题重试</small>
+            </div>
+        `;
+    } else if (data.message) {
+        // 没有到期客户的情况
+        html = `
+            <div style="text-align: center; color: #52c41a; padding: 20px; line-height: 1.6;">
+                ${data.message}<br>
+                <small style="color: #666; margin-top: 10px; display: block;">
+                    ${data.today_date || ''}<br>
+                    ${data.reminder_type || ''}
+                </small>
+            </div>
+        `;
+    } else if (data.expiring_customers && data.expiring_customers.length > 0) {
+        // 有到期客户的情况 - 移除信息区域，直接显示客户列表
+        html = '';
+
+        data.expiring_customers.forEach((customer, index) => {
+            // 判断销售人员类型并设置颜色
+            let salesColor = '#666';
+            let salesName = customer.sales_person || '未分配';
+            
+            // 精确匹配销售人员
+            const salesNameLower = salesName.toLowerCase();
+            if (salesNameLower.includes('esther')) {
+                salesColor = '#ff6b81'; // 粉红色表示Esther负责
+            } else if (salesNameLower.includes('mia')) {
+                salesColor = '#1890ff'; // 蓝色表示Mia负责
+            }
+            
+            console.log('销售人员:', salesName, '小写:', salesNameLower, '颜色:', salesColor); // 调试信息
+
+            // 判断客户类型
+            let customerType = '';
+            let customerTypeColor = '#666';
+            
+            // 根据客户分类或其他字段判断是否为name客户
+            if (customer.customer_classification) {
+                const classification = customer.customer_classification.toLowerCase();
+                if (classification.includes('name') || classification.includes('战区')) {
+                    customerType = 'Name';
+                    customerTypeColor = '#52c41a';
+                } else if (classification.includes('融合')) {
+                    customerType = '融合';
+                    customerTypeColor = '#fa8c16';
+                } else {
+                    customerType = '非Name';
+                    customerTypeColor = '#8c8c8c';
+                }
+            } else {
+                // 如果没有分类信息，根据其他规则判断
+                customerType = '待分类';
+                customerTypeColor = '#d9d9d9';
+            }
+
+            html += `
+                <div style="padding: 8px 12px; border-bottom: 1px solid #f0f0f0; ${index === data.expiring_customers.length - 1 ? 'border-bottom: none;' : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;">
+                        <div style="font-weight: bold; color: #f5222d; font-size: 14px;">
+                            ${customer.expiry_date}
+                        </div>
+                        <div style="background: ${customerTypeColor}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 500;">
+                            ${customerType}
+                        </div>
+                    </div>
+                    <div style="color: #666; font-size: 12px; margin-bottom: 2px; word-break: break-all;">
+                        ${customer.jdy_account}
+                    </div>
+                    <div style="color: #333; font-size: 12px; margin-bottom: 2px; word-break: break-all; line-height: 1.3;">
+                        ${customer.company_name}
+                    </div>
+                    <div style="font-size: 12px; font-weight: 500;">
+                        销售: <span style="color: ${salesColor}; font-weight: bold;">${salesName}</span>
+                    </div>
+                </div>
+            `;
+        });
+    } else {
+        // 数据为空的情况
+        html = `
+            <div style="text-align: center; color: #666; padding: 20px;">
+                📅 暂无到期提醒<br>
+                <small style="color: #999;">点击标题刷新</small>
+            </div>
+        `;
     }
 
-    // 创建计算器容器
-    const calculatorContainer = document.createElement('div');
-    calculatorContainer.id = 'smart-calculator';
-    calculatorContainer.className = 'smart-calculator';
+    container.innerHTML = html;
+}
 
-    // 创建计算器头部
-    const calculatorHeader = document.createElement('div');
-    calculatorHeader.className = 'calculator-header';
-    calculatorHeader.textContent = '智能计算器';
-
-    // 创建计算器显示区域
-    const calculatorDisplay = document.createElement('div');
-    calculatorDisplay.className = 'calculator-display';
-
-    // 创建结果显示区域
-    const displayInput = document.createElement('input');
-    displayInput.type = 'text';
-    displayInput.readOnly = true;
-    displayInput.className = 'calculator-input';
-    displayInput.value = '0';
-
-    calculatorDisplay.appendChild(displayInput);
-
-    // 创建计算器按钮区域
-    const calculatorButtons = document.createElement('div');
-    calculatorButtons.className = 'calculator-buttons';
-
-    // 定义计算器按钮
-    const buttons = [
-        ['7', '8', '9', '÷'],
-        ['4', '5', '6', '×'],
-        ['1', '2', '3', '-'],
-        ['0', '.', '=', '+'],
-        ['AC', 'C']
-    ];
-
-    // 创建按钮
-    buttons.forEach(row => {
-        const buttonRow = document.createElement('div');
-        buttonRow.className = 'calculator-row';
-        
-        row.forEach(buttonText => {
-            const button = document.createElement('button');
-            button.className = 'calculator-button';
-            button.textContent = buttonText;
-            
-            // 根据按钮类型添加不同的样式
-            if (['÷', '×', '-', '+'].includes(buttonText)) {
-                button.classList.add('operator-button');
-            } else if (buttonText === '=') {
-                button.classList.add('equals-button');
-            } else if (['AC', 'C'].includes(buttonText)) {
-                button.classList.add('clear-button');
-            }
-            
-            buttonRow.appendChild(button);
-        });
-        
-        calculatorButtons.appendChild(buttonRow);
-    });
-
-    // 组装计算器
-    calculatorContainer.appendChild(calculatorHeader);
-    calculatorContainer.appendChild(calculatorDisplay);
-    calculatorContainer.appendChild(calculatorButtons);
-    document.body.appendChild(calculatorContainer);
-
-    // 添加计算器事件处理
-    const calculatorButtonElements = calculatorContainer.querySelectorAll('.calculator-button');
-    const display = displayInput;
-    let firstOperand = '';
-    let operator = '';
-    let waitingForSecondOperand = false;
-
-    calculatorButtonElements.forEach(button => {
-        button.addEventListener('click', function() {
-            const value = this.textContent;
-            handleButtonClick(value);
-        });
-    });
-
-    // 添加回车键执行等于操作，但只在计算器显示或按钮区域被点击后才捕获键盘事件
-    let calculatorActive = false;
-    
-    // 监听计算器容器的点击事件，标记计算器为活动状态
-    calculatorContainer.addEventListener('click', function() {
-        calculatorActive = true;
-    });
-    
-    // 监听整个文档的点击事件，如果点击不在计算器上，则标记计算器为非活动状态
-    document.addEventListener('click', function(e) {
-        if (!calculatorContainer.contains(e.target)) {
-            calculatorActive = false;
-        }
-    });
-    
-    // 修改键盘事件处理，使计算器输入框可以正常接收键盘输入
-    document.addEventListener('keydown', function(e) {
-        // 特殊处理：如果焦点在计算器输入框上，允许输入数字和小数点
-        if (e.target === displayInput) {
-            if ('0123456789.'.includes(e.key)) {
-                e.preventDefault();
-                handleButtonClick(e.key);
-            } else if (e.key === 'Backspace') {
-                e.preventDefault();
-                display.value = display.value.slice(0, -1) || '0';
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                handleButtonClick('=');
-            } else if (e.key === ' ') {
-                // 空格键在输入框中也实现乘法操作
-                e.preventDefault();
-                handleButtonClick('×');
-            }
-            return;
-        }
-        
-        // 如果是在其他文本输入区域（textarea, input等），则不处理计算器快捷键
-        if (e.target.matches('textarea, input:not(.calculator-input), [contenteditable="true"]')) {
-            return;
-        }
-        
-        // 只有当计算器活动时才处理键盘事件
-        if (calculatorActive) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                handleButtonClick('=');
-            } else if ('0123456789.'.includes(e.key)) {
-                handleButtonClick(e.key);
-            } else if (['+', '-', '*', '/'].includes(e.key)) {
-                handleButtonClick(e.key.replace('*', '×').replace('/', '÷'));
-            } else if (e.key.toLowerCase() === 'c') {
-                handleButtonClick('C');
-            } else if (e.key.toLowerCase() === 'escape') {
-                handleButtonClick('AC');
-            } else if (e.key === 'Backspace') {
-                // Backspace键实现删除单个字符的功能
-                display.value = display.value.slice(0, -1) || '0';
-            } else if (e.key === ' ') {
-                // 空格键实现乘法操作
-                e.preventDefault();
-                handleButtonClick('×');
-            }
-        }
-    });
+// 计算器代码已移除，替换为到期客户提醒功能
 
     function handleButtonClick(value) {
         if (/\d/.test(value)) {
@@ -1028,11 +1212,10 @@ function createSmartCalculator() {
                 // 显示完整的运算式子
                 display.value = `${firstOperand} ${operator} ${secondOperand} = ${formattedResult}`;
             } catch (error) {
-                display.value = '错误';
+                console.error('计算错误:', error);
             }
         }
     }
-}
 
 // 悬浮球功能 =====
 document.addEventListener('DOMContentLoaded', function() {
@@ -1378,8 +1561,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (mode.includes('企微')) {
             return `<span style="color: #1890ff;">${mode} <strong>⚠️ 需在SA后台和企微平台下单</strong></span>`;
-        } else if (mode.includes('钉钉')) {
+        } else if (mode.includes('钉钉') && !mode.includes('内置')) {
             return `<span style="color: #52c41a;">${mode} <strong>✅ 仅需在钉钉后台下单</strong></span>`;
+        } else if (mode.includes('内置')) {
+            return `<span style="color: #fa8c16;">${mode} <strong>💡 简道眼下单</strong></span>`;
         }
         return mode;
     }
@@ -1444,7 +1629,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 自动监控功能
     let statusCheckInterval = null;
-    let isMonitoring = false;
     
     // 切换监控状态功能已移除（监控自动启动）
     
@@ -1466,7 +1650,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 isMonitoring = true;
                 // 停止监控按钮已移除
-                document.getElementById('monitorStatusText').textContent = '后台监控中';
+                const monitorStatusElement = document.getElementById('monitorStatusText');
+                if (monitorStatusElement) {
+                    monitorStatusElement.textContent = '后台监控中';
+                }
                 
                 // 开始定期检查监控状态
                 startStatusCheck();
@@ -1499,7 +1686,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success) {
                 isMonitoring = false;
                 // 停止监控按钮已移除
-                document.getElementById('monitorStatusText').textContent = '已停止';
+                const monitorStatusElement = document.getElementById('monitorStatusText');
+                if (monitorStatusElement) {
+                    monitorStatusElement.textContent = '已停止';
+                }
                 
                 // 停止状态检查
                 stopStatusCheck();
@@ -1734,4 +1924,487 @@ function onContractGenerated(jdyId) {
             }
         });
     }
+}
+// 创建到期客户提醒看板（替代智能计算器）
+function createExpiringCustomersReminder() {
+    console.log('开始创建到期客户提醒看板');
+    
+    // 移除现有看板
+    const existing = document.getElementById('smart-calculator');
+    if (existing) existing.remove();
+
+    // 创建新看板
+    const container = document.createElement('div');
+    container.id = 'smart-calculator';
+    
+    // 强制设置样式
+    container.style.position = 'fixed';
+    container.style.top = '20px';
+    container.style.right = '20px';
+    container.style.width = '335px';
+    container.style.height = '120px';
+    container.style.maxHeight = '120px';
+    container.style.backgroundColor = 'white';
+    container.style.borderRadius = '8px';
+    container.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)';
+    container.style.borderLeft = '4px solid #E6C17D';
+    container.style.zIndex = '1000';
+    container.style.overflow = 'hidden';
+
+    // 标题栏
+    const header = document.createElement('div');
+    Object.assign(header.style, {
+        padding: '8px 15px',
+        backgroundColor: '#F0D6A3',
+        borderRadius: '8px 8px 0 0',
+        fontSize: '16px',
+        fontWeight: '600',
+        color: '#4A4A4A',
+        textAlign: 'center',
+        height: '40px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box'
+    });
+    header.textContent = '📅 到期客户提醒';
+
+    // 内容区域
+    const content = document.createElement('div');
+    Object.assign(content.style, {
+        padding: '10px',
+        backgroundColor: 'white',
+        height: '100px',
+        overflowY: 'auto'
+    });
+    content.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">正在加载...</div>';
+
+    container.appendChild(header);
+    container.appendChild(content);
+    document.body.appendChild(container);
+    
+    console.log('看板已创建，开始获取数据');
+    fetchExpiringCustomers();
+}
+
+// 日历时间显示功能
+function initCalendarDisplay() {
+    function updateDateTime() {
+        const now = new Date();
+        
+        // 更新日期
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const day = now.getDate();
+        const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+        const weekday = weekdays[now.getDay()];
+        
+        const dateElement = document.getElementById('calendarDate');
+        if (dateElement) {
+            dateElement.textContent = `${year}年${month.toString().padStart(2, '0')}月${day.toString().padStart(2, '0')}日 ${weekday}`;
+        }
+        
+        // 更新时间
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        
+        const timeElement = document.getElementById('calendarTime');
+        if (timeElement) {
+            timeElement.textContent = `${hours}:${minutes}`;
+        }
+    }
+    
+    // 立即更新一次
+    updateDateTime();
+    
+    // 每秒更新时间
+    setInterval(updateDateTime, 1000);
+    
+    // 获取本月收款金额
+    fetchMonthlyRevenue();
+}
+
+// 获取本月收款总金额
+function fetchMonthlyRevenue() {
+    fetch('/get_monthly_revenue', {
+        credentials: 'same-origin'
+    })
+        .then(response => {
+            if (response.status === 302 || response.url.includes('/login')) {
+                console.log('需要登录才能获取收款数据');
+                const revenueElement = document.getElementById('monthlyRevenue');
+                if (revenueElement) {
+                    revenueElement.textContent = '需要登录';
+                }
+                return null;
+            }
+            if (response.status === 404) {
+                console.log('收款数据API不可用');
+                const revenueElement = document.getElementById('monthlyRevenue');
+                if (revenueElement) {
+                    revenueElement.textContent = '暂无数据';
+                }
+                return null;
+            }
+            const contentType = response.headers.get('content-type');
+            if (!response.ok || !contentType || !contentType.includes('application/json')) {
+                throw new Error('获取收款数据失败');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data) return;
+            
+            const revenueElement = document.getElementById('monthlyRevenue');
+            if (revenueElement) {
+                if (data.error) {
+                    console.error('获取收款数据失败:', data.error);
+                    revenueElement.textContent = '数据错误';
+                } else if (data.revenue !== undefined) {
+                    // 格式化金额显示
+                    const formattedRevenue = new Intl.NumberFormat('zh-CN').format(data.revenue);
+                    revenueElement.textContent = formattedRevenue;
+                } else {
+                    revenueElement.textContent = '--';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('获取收款数据失败:', error);
+            const revenueElement = document.getElementById('monthlyRevenue');
+            if (revenueElement) {
+                revenueElement.textContent = '--';
+            }
+        });
+}
+
+// 在页面加载时初始化日历显示
+document.addEventListener('DOMContentLoaded', function() {
+    // 延迟初始化，确保元素已加载
+    setTimeout(initCalendarDisplay, 500);
+});
+
+// 生成报价单功能
+function generateQuote() {
+    // 获取表单数据
+    const formData = new FormData(document.getElementById('contractForm'));
+    
+    // 验证必填字段
+    const requiredFields = ['company_name', 'tax_number', 'jdy_account', 'total_amount', 'user_count'];
+    for (let field of requiredFields) {
+        if (!formData.get(field)) {
+            alert(`请填写${getFieldLabel(field)}`);
+            return;
+        }
+    }
+    
+    // 显示加载状态
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = '生成中...';
+    button.disabled = true;
+    
+    // 发送请求到后端
+    fetch('/generate_quote', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('生成报价单失败');
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        // 下载生成的报价单
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${formData.get('company_name')}_报价单.docx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        alert('报价单生成成功！');
+    })
+    .catch(error => {
+        console.error('生成报价单错误:', error);
+        alert('生成报价单失败，请检查填写的信息');
+    })
+    .finally(() => {
+        // 恢复按钮状态
+        button.textContent = originalText;
+        button.disabled = false;
+    });
+}
+
+// 获取字段标签
+function getFieldLabel(fieldName) {
+    const labels = {
+        'company_name': '公司名称',
+        'tax_number': '税号',
+        'jdy_account': '简道云账号',
+        'total_amount': '服务费用金额',
+        'user_count': '使用人数'
+    };
+    return labels[fieldName] || fieldName;
+}
+
+// 创建智能计算器
+function createSmartCalculator() {
+    // 检查是否已存在计算器
+    const existingCalculator = document.getElementById('smart-calculator');
+    if (existingCalculator) {
+        return; // 如果已存在，直接返回
+    }
+
+    // 创建计算器容器
+    const calculator = document.createElement('div');
+    calculator.id = 'smart-calculator';
+    calculator.className = 'smart-calculator';
+    calculator.style.position = 'fixed';
+    calculator.style.top = '20px';
+    calculator.style.right = '20px';
+    calculator.style.zIndex = '1000';
+    calculator.style.display = 'none'; // 默认隐藏
+
+    // 创建计算器标题栏
+    const header = document.createElement('div');
+    header.className = 'calculator-header';
+    
+    const title = document.createElement('span');
+    title.textContent = '🧮 智能计算器';
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '×';
+    closeBtn.style.background = 'none';
+    closeBtn.style.border = 'none';
+    closeBtn.style.color = '#fff';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.fontSize = '18px';
+    closeBtn.style.marginLeft = 'auto';
+    closeBtn.onclick = () => calculator.style.display = 'none';
+    
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+
+    // 创建显示屏
+    const display = document.createElement('input');
+    display.className = 'calculator-input';
+    display.type = 'text';
+    display.value = '0';
+    display.readOnly = true;
+
+    // 创建按钮区域
+    const buttonsContainer = document.createElement('div');
+    buttonsContainer.className = 'calculator-buttons';
+
+    // 定义按钮布局
+    const buttonLayout = [
+        ['AC', 'C', '÷'],
+        ['7', '8', '9', '×'],
+        ['4', '5', '6', '-'],
+        ['1', '2', '3', '+'],
+        ['0', '.', '=']
+    ];
+
+    // 计算器状态变量
+    let firstOperand = '';
+    let operator = '';
+    let waitingForSecondOperand = false;
+
+    // 创建按钮
+    buttonLayout.forEach(row => {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 'calculator-row';
+        
+        row.forEach(buttonText => {
+            const button = document.createElement('button');
+            button.className = 'calculator-button';
+            button.textContent = buttonText;
+            button.type = 'button';
+            
+            // 特殊按钮样式
+            if (buttonText === '0') {
+                button.style.gridColumn = 'span 2';
+            }
+            if (['+', '-', '×', '÷', '='].includes(buttonText)) {
+                button.style.backgroundColor = '#ff9500';
+            }
+            if (['AC', 'C'].includes(buttonText)) {
+                button.style.backgroundColor = '#a6a6a6';
+            }
+            
+            button.onclick = () => handleButtonClick(buttonText);
+            rowDiv.appendChild(button);
+        });
+        
+        buttonsContainer.appendChild(rowDiv);
+    });
+
+    // 按钮点击处理函数
+    function handleButtonClick(value) {
+        if (/\d/.test(value)) {
+            // 数字按钮
+            if (waitingForSecondOperand) {
+                display.value = value;
+                waitingForSecondOperand = false;
+            } else {
+                display.value = display.value === '0' ? value : display.value + value;
+            }
+            return;
+        }
+
+        if (value === '.') {
+            // 小数点按钮
+            if (waitingForSecondOperand) {
+                display.value = '0.';
+                waitingForSecondOperand = false;
+                return;
+            }
+            if (display.value.indexOf('.') === -1) {
+                display.value += '.';
+            }
+            return;
+        }
+
+        if (['+', '-', '×', '÷'].includes(value)) {
+            // 操作符按钮
+            performCalculation();
+            operator = value;
+            
+            // 从显示的式子中提取结果值
+            const currentDisplay = display.value;
+            const resultMatch = currentDisplay.match(/=\s*(.+)$/);
+            if (resultMatch) {
+                firstOperand = resultMatch[1];
+            } else {
+                firstOperand = currentDisplay;
+            }
+            
+            waitingForSecondOperand = true;
+            return;
+        }
+
+        if (value === '=') {
+            // 等于按钮
+            performCalculation();
+            // 保存当前结果作为下一次计算的第一个操作数
+            const currentResult = display.value;
+            // 从显示的式子中提取结果值
+            const resultMatch = currentResult.match(/=\s*(.+)$/);
+            if (resultMatch) {
+                firstOperand = resultMatch[1];
+            } else {
+                firstOperand = currentResult;
+            }
+            operator = '';
+            waitingForSecondOperand = true;
+            return;
+        }
+
+        if (value === 'C') {
+            // 清空输入
+            display.value = '0';
+            return;
+        }
+
+        if (value === 'AC') {
+            // 全部清除
+            display.value = '0';
+            firstOperand = '';
+            operator = '';
+            waitingForSecondOperand = false;
+            return;
+        }
+    }
+
+    function performCalculation() {
+        if (operator && firstOperand !== '') {
+            const secondOperand = display.value;
+            let result;
+            
+            try {
+                // 将操作符转换为JavaScript操作符
+                const op = operator === '×' ? '*' : operator === '÷' ? '/' : operator;
+                
+                // 对所有运算都使用更精确的计算方式
+                const num1 = parseFloat(firstOperand);
+                const num2 = parseFloat(secondOperand);
+                
+                if (op === '+') {
+                    result = num1 + num2;
+                } else if (op === '-') {
+                    result = num1 - num2;
+                } else if (op === '*') {
+                    result = num1 * num2;
+                } else if (op === '/') {
+                    if (num2 === 0) {
+                        display.value = '错误：除数不能为零';
+                        return;
+                    }
+                    result = num1 / num2;
+                }
+                
+                // 格式化结果
+                let formattedResult;
+                if (Number.isInteger(result) || (Math.abs(result) >= 1e15 || Math.abs(result) < 1e-10)) {
+                    formattedResult = result.toString();
+                } else {
+                    formattedResult = result.toFixed(12).replace(/\.?0+$/, '');
+                    if (formattedResult.includes('.')) {
+                        const parts = formattedResult.split('.');
+                        if (parts[1].length < 6) {
+                            formattedResult = result.toFixed(6).replace(/\.?0+$/, '');
+                        }
+                    }
+                }
+                
+                // 显示完整的运算式子
+                display.value = `${firstOperand} ${operator} ${secondOperand} = ${formattedResult}`;
+            } catch (error) {
+                console.error('计算错误:', error);
+                display.value = '计算错误';
+            }
+        }
+    }
+
+    // 组装计算器
+    calculator.appendChild(header);
+    calculator.appendChild(display);
+    calculator.appendChild(buttonsContainer);
+
+    // 添加到页面
+    document.body.appendChild(calculator);
+
+    // 添加快捷键支持（可选）
+    document.addEventListener('keydown', function(event) {
+        if (calculator.style.display === 'none') return;
+        
+        const key = event.key;
+        if (/\d/.test(key) || ['+', '-', '*', '/', '=', 'Enter', '.', 'Escape', 'c', 'C'].includes(key)) {
+            event.preventDefault();
+            
+            if (key === 'Enter' || key === '=') {
+                handleButtonClick('=');
+            } else if (key === 'Escape') {
+                calculator.style.display = 'none';
+            } else if (key === 'c' || key === 'C') {
+                handleButtonClick('C');
+            } else if (key === '*') {
+                handleButtonClick('×');
+            } else if (key === '/') {
+                handleButtonClick('÷');
+            } else {
+                handleButtonClick(key);
+            }
+        }
+    });
+
+    console.log('智能计算器已创建');
 }

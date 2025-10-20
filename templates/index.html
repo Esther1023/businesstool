@@ -49,12 +49,14 @@
                                                     <p class="upload-hint">上传后自动识别并填充表单</p>
                                                 </div>
                                             </div>
-                                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+                                            <input type="file" id="imageFileInput" accept="image/*"
+                                                style="display: none;">
                                         </div>
                                         <div class="image-preview" id="imagePreview" style="display: none;">
                                             <img id="previewImage" src="" alt="预览图片">
                                             <div class="preview-actions">
-                                                <button type="button" class="btn btn-secondary" id="clearImageBtn">清除图片</button>
+                                                <button type="button" class="btn btn-secondary"
+                                                    id="clearImageBtn">清除图片</button>
                                             </div>
                                         </div>
                                         <div class="ocr-progress" id="ocrProgress" style="display: none;">
@@ -78,7 +80,8 @@
                                                     <p class="clipboard-hint">系统将自动解析并填充表单</p>
                                                 </div>
                                             </div>
-                                            <textarea id="clipboardTextarea" placeholder="在此粘贴文本内容，系统将自动识别并填充相关字段..." rows="8"></textarea>
+                                            <textarea id="clipboardTextarea" placeholder="在此粘贴文本内容，系统将自动识别并填充相关字段..."
+                                                rows="8"></textarea>
                                         </div>
                                     </div>
                                 </div>
@@ -154,14 +157,6 @@
                                     <label>续费责任销售：</label>
                                     <span id="salesPerson"></span>
                                 </div>
-                                <div class="info-row">
-                                    <label>责任销售中英文：</label>
-                                    <span id="salesCnEn"></span>
-                                </div>
-                                <div class="info-row">
-                                    <label>简道云销售：</label>
-                                    <span id="jdySales"></span>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -179,13 +174,13 @@
                                     <div class="duration-inputs">
                                         <div class="duration-input-item">
                                             <label for="serviceYears">年份</label>
-                                            <input type="number" class="form-control" name="service_years" required min="0"
-                                                id="serviceYears" placeholder="0">
+                                            <input type="number" class="form-control" name="service_years" required
+                                                min="0" id="serviceYears" placeholder="0">
                                         </div>
                                         <div class="duration-input-item">
                                             <label for="serviceMonths">额外月份</label>
-                                            <input type="number" class="form-control" name="service_months" min="0" max="23"
-                                                id="serviceMonths" placeholder="0">
+                                            <input type="number" class="form-control" name="service_months" min="0"
+                                                max="23" id="serviceMonths" placeholder="0">
                                         </div>
                                     </div>
                                     <div class="duration-summary" id="durationSummary">
@@ -198,8 +193,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="startMonth">开始月份（必填）</label>
-                                    <input type="number" class="form-control" name="start_month" min="1" max="12" required
-                                        id="startMonth">
+                                    <input type="number" class="form-control" name="start_month" min="1" max="12"
+                                        required id="startMonth">
                                 </div>
                                 <div class="form-group">
                                     <label for="startDay">开始日期（必填）</label>
@@ -208,7 +203,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="endYear">结束年份（自动计算）</label>
-                                    <input type="number" class="form-control" name="end_year" required readonly id="endYear">
+                                    <input type="number" class="form-control" name="end_year" required readonly
+                                        id="endYear">
                                 </div>
                                 <div class="form-group">
                                     <label for="endMonth">结束月份（自动计算）</label>
@@ -217,8 +213,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="endDay">结束日期（自动计算）</label>
-                                    <input type="number" class="form-control" name="end_day" min="1" max="31" required readonly
-                                        id="endDay">
+                                    <input type="number" class="form-control" name="end_day" min="1" max="31" required
+                                        readonly id="endDay">
                                 </div>
                             </div>
                         </div>
@@ -228,14 +224,14 @@
                             <div class="subsection-fields">
                                 <div class="form-group">
                                     <label for="totalAmount">服务费用金额（数字）</label>
-                                    <input type="number" class="form-control" name="total_amount" required id="totalAmount"
-                                        step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?"
+                                    <input type="number" class="form-control" name="total_amount" required
+                                        id="totalAmount" step="0.01" min="0" pattern="[0-9]+(\.[0-9]{1,2})?"
                                         oninput="calculateUnitPrice()">
                                 </div>
                                 <div class="form-group">
                                     <label for="user_count">使用人数</label>
-                                    <input type="number" class="form-control" name="user_count" id="user_count" required min="1"
-                                        step="1" pattern="[0-9]+" oninput="calculateUnitPrice()">
+                                    <input type="number" class="form-control" name="user_count" id="user_count" required
+                                        min="1" step="1" pattern="[0-9]+" oninput="calculateUnitPrice()">
                                 </div>
                                 <div class="form-group">
                                     <label for="unitPrice">单价（元/人/年）</label>
@@ -245,11 +241,20 @@
                                 </div>
                                 <div class="form-group full-width">
                                     <label for="totalAmountCn">服务费用金额（大写，自动生成）</label>
-                                    <div class="input-group">
+                                    <div class="amount-with-buttons">
                                         <input type="text" class="form-control" name="total_amount_cn" required readonly
                                             id="totalAmountCn">
-                                        <button type="button" class="btn btn-secondary" onclick="fillTestData()">填充测试数据</button>
-                                        <button type="submit" class="btn btn-generate">生成合同</button>
+                                        <div class="inline-buttons">
+                                            <button type="button" class="btn btn-secondary action-btn" onclick="fillTestData()">
+                                                填充测试数据
+                                            </button>
+                                            <button type="button" class="btn btn-quote action-btn" onclick="generateQuote()">
+                                                生成报价单
+                                            </button>
+                                            <button type="submit" class="btn btn-primary action-btn">
+                                                生成合同
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <input type="hidden" name="payment_amount" id="paymentAmount">
@@ -573,7 +578,7 @@
                 const items = e.clipboardData.items;
                 let hasImage = false;
                 let hasText = false;
-                
+
                 // 检查粘贴内容类型
                 for (let item of items) {
                     if (item.type.indexOf('image') !== -1) {
@@ -584,7 +589,7 @@
                         hasText = true;
                     }
                 }
-                
+
                 // 优先处理图片
                 if (hasImage) {
                     e.preventDefault();
@@ -717,25 +722,25 @@
                 },
                 body: JSON.stringify({ text: text })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.fields) {
-                    // 直接应用解析结果到表单
-                    autoFillFields(data.fields);
-                }
-            })
-            .catch(error => {
-                console.error('解析文本错误:', error);
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.fields) {
+                        // 直接应用解析结果到表单
+                        autoFillFields(data.fields);
+                    }
+                })
+                .catch(error => {
+                    console.error('解析文本错误:', error);
+                });
         }
 
         // 显示粘贴板成功提示
         function showClipboardSuccess(message = '文本粘贴成功！') {
             const clipboardArea = document.getElementById('clipboardArea');
             const clipboardContent = clipboardArea?.querySelector('.clipboard-content');
-            
+
             if (!clipboardContent) return;
-            
+
             const originalContent = clipboardContent.innerHTML;
 
             clipboardContent.innerHTML = `
@@ -759,12 +764,12 @@
                 if (input && value) {
                     input.value = value;
                     input.classList.add('auto-filled');
-                    
+
                     // 移除高亮效果
                     setTimeout(() => {
                         input.classList.remove('auto-filled');
                     }, 2000);
-                    
+
                     // 触发输入事件（用于公司名称搜索等）
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                 }
@@ -793,37 +798,37 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                ocrProgress.style.display = 'none';
-
-                if (data.success) {
-                    recognizedFields = data.parsed_fields;
-                    // 显示简化的成功提示并直接填充
-                    showOCRSuccess(data);
-                } else {
-                    console.error('OCR识别失败:', data.error);
-
-                    // 检查是否是OCR不可用的错误
-                    if (data.ocr_available === false || data.tesseract_available === false) {
-                        showOCRUnavailable(data.error);
-                    } else {
-                        alert('图片识别失败：' + (data.error || '未知错误'));
-                        resetUploadArea();
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
-                }
-            })
-            .catch(error => {
-                ocrProgress.style.display = 'none';
-                console.error('OCR请求失败:', error);
-                alert('网络请求失败：' + error.message + '\n请检查网络连接并重试');
-                resetUploadArea();
-            });
+                    return response.json();
+                })
+                .then(data => {
+                    ocrProgress.style.display = 'none';
+
+                    if (data.success) {
+                        recognizedFields = data.parsed_fields;
+                        // 显示简化的成功提示并直接填充
+                        showOCRSuccess(data);
+                    } else {
+                        console.error('OCR识别失败:', data.error);
+
+                        // 检查是否是OCR不可用的错误
+                        if (data.ocr_available === false || data.tesseract_available === false) {
+                            showOCRUnavailable(data.error);
+                        } else {
+                            alert('图片识别失败：' + (data.error || '未知错误'));
+                            resetUploadArea();
+                        }
+                    }
+                })
+                .catch(error => {
+                    ocrProgress.style.display = 'none';
+                    console.error('OCR请求失败:', error);
+                    alert('网络请求失败：' + error.message + '\n请检查网络连接并重试');
+                    resetUploadArea();
+                });
         }
 
         function showOCRSuccess(data) {
@@ -1025,7 +1030,7 @@
         }
 
         // 初始化智能表单填充功能
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             initImageUpload();
         });
 
@@ -1060,10 +1065,10 @@
                         const file = new File([blob], templateName, {
                             type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
                         });
-                        
+
                         // 设置到文件输入框
                         const fileInput = document.getElementById('fileInput');
-                        
+
                         // 使用 DataTransfer API
                         try {
                             const dataTransfer = new DataTransfer();
@@ -1175,7 +1180,7 @@
                 document.getElementById('uidArr').textContent = customerData.uid_arr || '';
                 const customerClassification = document.getElementById('customerClassification');
                 const classificationText = customerData.customer_classification || '';
-                
+
                 // 检查是否是精确的"战区Name名单"
                 if (classificationText === '战区Name名单') {
                     // 直接设置内联样式，使用!important确保优先级
@@ -1184,7 +1189,7 @@
                     customerClassification.style.padding = '2px 6px';
                     customerClassification.style.borderRadius = '4px';
                     customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
-                    
+
                     // 设置文本内容并添加提醒
                     customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
                 } else {
@@ -1194,20 +1199,29 @@
                     customerClassification.style.padding = '';
                     customerClassification.style.borderRadius = '';
                     customerClassification.style.backgroundColor = '';
-                    
+
                     // 只显示原始文本，不添加提醒
                     customerClassification.textContent = classificationText;
                 }
                 document.getElementById('salesPerson').textContent = customerData.sales || '';
-                document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
-                document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
+                
+                // 安全设置可选元素的内容
+                const salesCnEnElement = document.getElementById('salesCnEn');
+                if (salesCnEnElement) {
+                    salesCnEnElement.textContent = customerData.sales_cn_en || '';
+                }
+                
+                const jdySalesElement = document.getElementById('jdySales');
+                if (jdySalesElement) {
+                    jdySalesElement.textContent = customerData.jdy_sales || '';
+                }
 
                 // 自动填充公司名称（优先使用公司名称，如果为空则使用账号-企业名称）
-                const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan') 
-                    ? customerData.company_name 
+                const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan')
+                    ? customerData.company_name
                     : customerData.account_enterprise_name || '';
                 document.querySelector('[name="company_name"]').value = companyNameToUse;
-                
+
                 // 自动填充税号
                 if (customerData.tax_number && customerData.tax_number !== 'nan') {
                     document.querySelector('[name="tax_number"]').value = customerData.tax_number;
@@ -1215,7 +1229,7 @@
 
                 // 显示客户信息框
                 document.getElementById('customerInfo').style.display = 'block';
-                
+
                 // 显示下单流程提醒
                 showOrderProcessTip(customerData.integration_mode);
             } catch (error) {
@@ -1273,7 +1287,7 @@
             document.getElementById('uidArr').textContent = customerData.uid_arr || '';
             const customerClassification = document.getElementById('customerClassification');
             const classificationText = customerData.customer_classification || '';
-            
+
             // 检查是否是精确的"战区Name名单"
             if (classificationText === '战区Name名单') {
                 // 直接设置内联样式，使用!important确保优先级
@@ -1282,7 +1296,7 @@
                 customerClassification.style.padding = '2px 6px';
                 customerClassification.style.borderRadius = '4px';
                 customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
-                
+
                 // 设置文本内容并添加提醒
                 customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
             } else {
@@ -1292,25 +1306,34 @@
                 customerClassification.style.padding = '';
                 customerClassification.style.borderRadius = '';
                 customerClassification.style.backgroundColor = '';
-                
+
                 // 只显示原始文本，不添加提醒
                 customerClassification.textContent = classificationText;
             }
             document.getElementById('salesPerson').textContent = customerData.sales || '';
-            document.getElementById('salesCnEn').textContent = customerData.sales_cn_en || '';
-            document.getElementById('jdySales').textContent = customerData.jdy_sales || '';
+            
+            // 安全设置可选元素的内容
+            const salesCnEnElement = document.getElementById('salesCnEn');
+            if (salesCnEnElement) {
+                salesCnEnElement.textContent = customerData.sales_cn_en || '';
+            }
+            
+            const jdySalesElement = document.getElementById('jdySales');
+            if (jdySalesElement) {
+                jdySalesElement.textContent = customerData.jdy_sales || '';
+            }
 
             // 自动填充简道云账号（使用用户ID）
             if (customerData.user_id) {
                 document.querySelector('[name="jdy_account"]').value = customerData.user_id;
             }
-            
+
             // 自动填充公司名称（优先使用公司名称，如果为空则使用账号-企业名称）
-            const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan') 
-                ? customerData.company_name 
+            const companyNameToUse = (customerData.company_name && customerData.company_name !== 'nan')
+                ? customerData.company_name
                 : customerData.account_enterprise_name || '';
             document.querySelector('[name="company_name"]').value = companyNameToUse;
-            
+
             // 自动填充税号
             if (customerData.tax_number && customerData.tax_number !== 'nan') {
                 document.querySelector('[name="tax_number"]').value = customerData.tax_number;
@@ -1320,81 +1343,81 @@
             document.getElementById('customerInfo').style.display = 'block';
         }
 
-        document.getElementById('contractForm').addEventListener('submit', function(e) {
+        document.getElementById('contractForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            
+
             const templateFile = document.querySelector('input[type="file"]').files[0];
             if (!templateFile) {
                 alert('请选择合同模板文件');
                 return;
             }
-            
+
             // 创建FormData对象并添加所有表单数据
             const formData = new FormData(this);
-            
+
             // 确保文件和其他必要字段都已添加
             if (!formData.has('template')) {
                 formData.append('template', templateFile);
             }
-            
+
             // 提交表单
             // 提交表单
             fetch('/generate', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        console.error('服务器响应错误:', response.status, text);
-                        // 尝试解析JSON错误信息
-                        try {
-                            const errorObj = JSON.parse(text);
-                            throw new Error(errorObj.error || `服务器错误 (${response.status}): ${text}`);
-                        } catch (e) {
-                            // 如果不是JSON，直接显示文本
-                            throw new Error(`服务器错误 (${response.status}): ${text}`);
-                        }
-                    });
-                }
-                return response.blob();
-            })
-            .then(blob => {
-                // 创建下载链接
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                
-                // 设置文件名
-                const companyName = document.querySelector('[name="company_name"]').value;
-                const jdyAccount = document.querySelector('[name="jdy_account"]').value;
-                const startYear = document.getElementById('startYear').value;
-                const endYear = document.getElementById('endYear').value;
-                const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                
-                // 新的文件命名格式：开始年份-结束年份+公司名称+账号ID+帆软简道云续费合同+合同生成日期
-                a.download = `${startYear}-${endYear}${companyName}-${jdyAccount}-帆软简道云续费合同${currentDate}.docx`;
-                
-                // 触发下载
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-                
-                // 生成合同成功后自动推进到合同阶段
-                const jdyAccountTrimmed = jdyAccount.trim();
-                if (jdyAccountTrimmed && typeof onContractGenerated === 'function') {
-                    onContractGenerated(jdyAccountTrimmed);
-                }
-                
-                // 显示开票录入按钮
-                showInvoiceEntryButton();
-            })
-            .catch(error => {
-                console.error('生成合同失败:', error);
-                alert('生成合同失败: ' + error.message);
-            });
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            console.error('服务器响应错误:', response.status, text);
+                            // 尝试解析JSON错误信息
+                            try {
+                                const errorObj = JSON.parse(text);
+                                throw new Error(errorObj.error || `服务器错误 (${response.status}): ${text}`);
+                            } catch (e) {
+                                // 如果不是JSON，直接显示文本
+                                throw new Error(`服务器错误 (${response.status}): ${text}`);
+                            }
+                        });
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    // 创建下载链接
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+
+                    // 设置文件名
+                    const companyName = document.querySelector('[name="company_name"]').value;
+                    const jdyAccount = document.querySelector('[name="jdy_account"]').value;
+                    const startYear = document.getElementById('startYear').value;
+                    const endYear = document.getElementById('endYear').value;
+                    const currentDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+                    // 新的文件命名格式：开始年份-结束年份+公司名称+账号ID+帆软简道云续费合同+合同生成日期
+                    a.download = `${startYear}-${endYear}${companyName}-${jdyAccount}-帆软简道云续费合同${currentDate}.docx`;
+
+                    // 触发下载
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    // 生成合同成功后自动推进到合同阶段
+                    const jdyAccountTrimmed = jdyAccount.trim();
+                    if (jdyAccountTrimmed && typeof onContractGenerated === 'function') {
+                        onContractGenerated(jdyAccountTrimmed);
+                    }
+
+                    // 显示开票录入按钮
+                    showInvoiceEntryButton();
+                })
+                .catch(error => {
+                    console.error('生成合同失败:', error);
+                    alert('生成合同失败: ' + error.message);
+                });
         });
 
         // 显示开票录入按钮
@@ -1404,7 +1427,7 @@
             if (existingButton) {
                 existingButton.remove();
             }
-            
+
             const button = document.createElement('div');
             button.id = 'invoiceEntryButton';
             button.style.cssText = `
@@ -1424,7 +1447,7 @@
                 animation: pulse 2s infinite;
             `;
             button.innerHTML = '📋 开票录入 (点击进入)';
-            
+
             // 添加脉冲动画样式
             const style = document.createElement('style');
             style.textContent = `
@@ -1435,32 +1458,32 @@
                 }
             `;
             document.head.appendChild(style);
-            
-            button.addEventListener('click', function() {
+
+            button.addEventListener('click', function () {
                 window.open('https://www.jiandaoyun.com/dashboard#/app/5a015dd12d85443cacd1b893/form/020100200000000000000001', '_blank');
                 // 点击后立即隐藏
                 this.remove();
             });
-            
-            button.addEventListener('mouseenter', function() {
+
+            button.addEventListener('mouseenter', function () {
                 this.style.transform = 'translateY(-3px) scale(1.02)';
                 this.style.boxShadow = '0 8px 25px rgba(40, 167, 69, 0.6)';
             });
-            
-            button.addEventListener('mouseleave', function() {
+
+            button.addEventListener('mouseleave', function () {
                 this.style.transform = 'translateY(0) scale(1)';
                 this.style.boxShadow = '0 4px 20px rgba(40, 167, 69, 0.4)';
             });
-            
+
             document.body.appendChild(button);
-            
+
             // 显示成功提示
             const assistAnswer = document.getElementById('assistAnswer');
             if (assistAnswer) {
                 assistAnswer.innerHTML = '✅ 合同生成成功！<br>📋 <strong>开票录入按钮已显示在右上角</strong>（15秒后自动隐藏）';
                 assistAnswer.style.color = '#28a745';
             }
-            
+
             // 15秒后自动隐藏（延长显示时间）
             setTimeout(() => {
                 if (button && button.parentNode) {
@@ -1482,69 +1505,63 @@
     <!-- 悬浮球容器 -->
     <div id="assistBall" class="assist-ball" title="快捷操作（Ctrl/⌘ + Shift + K）">⚡</div>
     <div id="assistPanel" class="assist-panel" aria-hidden="true">
-      <div class="assist-panel-header">
-        <strong>快速操作</strong>
-        <div class="monitor-controls">
-          <button id="assistClose" class="btn btn-secondary" style="min-width:auto;padding:6px 10px;background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:4px;font-size:16px;font-weight:bold;">✕</button>
-        </div>
-      </div>
-      <div class="assist-panel-body">
-        <!-- 识别你的唯一ID：简道云账号 -->
-        <input id="assistId" class="assist-input" placeholder="简道云账号（外部ID）自动识别，必要时手填">
-        <div class="assist-row">
-          <button id="btnStageContract" class="btn">合同</button>
-          <button id="btnStageInvoice" class="btn">开票</button>
-        </div>
-        <div class="assist-row">
-          <button id="btnStageAdvanceInvoice" class="btn">提前开</button>
-          <button id="btnStageInvalid" class="btn">无效</button>
-          <button id="btnStageUpsell" class="btn">增购</button>
-          <button id="btnStageLost" class="btn">失联</button>
-        </div>
-        <div class="assist-row">
-          <button id="btnStagePaid" class="btn">回款</button>
-        </div>
-
-        <div class="assist-unsigned">
-          <div class="unsigned-header">
-            <h4>未来30天客户看板</h4>
+        <div class="assist-panel-header">
+            <strong>快速操作</strong>
             <div class="monitor-controls">
-              <button id="btnRefreshUnsigned" class="btn btn-secondary btn-refresh">刷新</button>
+                <button id="assistClose" class="btn btn-secondary"
+                    style="min-width:auto;padding:6px 10px;background:rgba(255,255,255,0.2);color:#fff;border:none;border-radius:4px;font-size:16px;font-weight:bold;">✕</button>
             </div>
-          </div>
-          <div class="unsigned-body">
-            <div id="status-filter-container" class="filter-container">
-              <!-- 状态筛选器将在这里动态生成 -->
-            </div>
-            <div id="unsignedCustomersList" class="unsigned-list">
-              <div class="loading" style="text-align: center; color: #666; padding: 10px;">加载中...</div>
-            </div>
-          </div>
         </div>
+        <div class="assist-panel-body">
+            <!-- 识别你的唯一ID：简道云账号 -->
+            <input id="assistId" class="assist-input" placeholder="简道云账号（外部ID）自动识别，必要时手填">
+            <div class="assist-row">
+                <button id="btnStageContract" class="btn">合同</button>
+                <button id="btnStageInvoice" class="btn">开票</button>
+            </div>
+            <div class="assist-row">
+                <button id="btnStageAdvanceInvoice" class="btn">提前开</button>
+                <button id="btnStageInvalid" class="btn">无效</button>
+                <button id="btnStageUpsell" class="btn">增购</button>
+                <button id="btnStageLost" class="btn">失联</button>
+            </div>
+            <div class="assist-row">
+                <button id="btnStagePaid" class="btn">回款</button>
+            </div>
 
-        <div class="assist-monitor">
-          <div class="monitor-header">
-            <h4>自动合同监控</h4>
-            <div class="monitor-controls">
-              <button id="btnCheckNow" class="btn btn-secondary btn-refresh">立即检查</button>
+            <div class="assist-unsigned">
+                <div class="unsigned-header">
+                    <h4>未来30天客户看板</h4>
+                    <div class="monitor-controls">
+                        <button id="btnRefreshUnsigned" class="btn btn-secondary btn-refresh">刷新</button>
+                    </div>
+                </div>
+                <div class="unsigned-body">
+                    <div id="status-filter-container" class="filter-container">
+                        <!-- 状态筛选器将在这里动态生成 -->
+                    </div>
+                    <div id="unsignedCustomersList" class="unsigned-list">
+                        <div class="loading" style="text-align: center; color: #666; padding: 10px;">加载中...</div>
+                    </div>
+                </div>
             </div>
-          </div>
-          <div class="monitor-status">
-            <div>状态: <span id="monitorStatusText">运行中</span></div>
-            <div>上次检查: <span id="lastCheckTime">从未</span></div>
-          </div>
-          <div id="monitorResults" class="monitor-results">
-            <!-- 监控结果将显示在这里 -->
-          </div>
-        </div>
 
-        <input id="assistAsk" class="assist-input" placeholder="问一句（先本地检索，之后接入知识库/记忆）">
-        <div class="assist-row">
-          <button id="btnAsk" class="btn">问</button>
-          <button id="btnClear" class="btn btn-secondary">清空</button>
+            <div class="assist-calendar">
+                <div class="calendar-display">
+                    <div class="calendar-date" id="calendarDate">2025年10月15日</div>
+                    <div class="calendar-time" id="calendarTime">16:56</div>
+                    <div class="calendar-revenue" id="calendarRevenue">本月收款总金额: <span id="monthlyRevenue">0</span>元
+                    </div>
+                </div>
+            </div>
+
+            <input id="assistAsk" class="assist-input" placeholder="问一句（先本地检索，之后接入知识库/记忆）">
+            <div class="assist-row">
+                <button id="btnAsk" class="btn">问</button>
+                <button id="btnClear" class="btn btn-secondary">清空</button>
+            </div>
+            <div id="assistAnswer" class="assist-help">提示：生成合同成功后会自动推进到"合同"。</div>
         </div>
-        <div id="assistAnswer" class="assist-help">提示：生成合同成功后会自动推进到"合同"。</div>
-      </div>
     </div>
 </body>
 

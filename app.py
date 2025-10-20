@@ -12,6 +12,9 @@ import re
 # 导入Flask相关模块
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 
+# 设置日志记录器
+logger = logging.getLogger(__name__)
+
 # 延迟导入OCR相关模块，避免启动时失败
 template_handler = None
 ocr_service = None
@@ -21,7 +24,6 @@ try:
     from stage_manager import StageManager
     STAGE_MANAGER_AVAILABLE = True
 except ImportError as e:
-    logger = logging.getLogger(__name__)
     logger.warning(f"状态管理器导入失败: {str(e)}")
     STAGE_MANAGER_AVAILABLE = False
 
@@ -29,10 +31,8 @@ except ImportError as e:
 try:
     from ocr_service_optimized import OptimizedOCRService as OCRService
     OCR_SERVICE_AVAILABLE = True
-    logger = logging.getLogger(__name__)
     logger.info("优化OCR服务导入成功")
 except ImportError as e:
-    logger = logging.getLogger(__name__)
     logger.warning(f"OCR服务导入失败: {str(e)}")
     OCR_SERVICE_AVAILABLE = False
 
@@ -41,7 +41,6 @@ try:
     from template_handler import TemplateHandler
     TEMPLATE_HANDLER_AVAILABLE = True
 except ImportError as e:
-    logger = logging.getLogger(__name__)
     logger.warning(f"模板处理器导入失败: {str(e)}")
     TEMPLATE_HANDLER_AVAILABLE = False
 
@@ -65,14 +64,11 @@ if env == 'production':
         format='%(asctime)s %(levelname)s: %(message)s'
     )
 else:
-    log_file = os.path.join(log_dir, 'app.log')
+    # 开发环境输出到控制台，方便调试
     logging.basicConfig(
-        filename=log_file,
         level=logging.INFO,
         format='%(asctime)s %(levelname)s: %(message)s'
     )
-
-logger = logging.getLogger(__name__)
 
 # 初始化OCR服务（容错处理）
 try:
@@ -234,6 +230,72 @@ def upload_excel():
 @app.route('/get_last_import_time')
 def get_last_import_time():
     return jsonify({'last_import_time': last_import_time})
+
+@app.route('/get_monthly_revenue')
+@login_required
+def get_monthly_revenue():
+    """获取本月收款总金额"""
+    try:
+        # 检查文件是否存在
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件: {excel_path}")
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'revenue': 0, 'error': '数据文件不存在'}), 500
+
+        try:
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'revenue': 0, 'error': '数据文件读取失败'}), 500
+
+        # 获取当前月份
+        now = datetime.now()
+        current_month = now.month
+        current_year = now.year
+        
+        # 计算本月收款总金额
+        monthly_revenue = 0
+        
+        # 检查是否有收款相关的列
+        revenue_columns = ['收款金额', '回款金额', '本月收款', '收款', '回款']
+        found_column = None
+        
+        for col in revenue_columns:
+            if col in df.columns:
+                found_column = col
+                break
+        
+        if found_column:
+            # 如果有收款日期列，按月份筛选
+            if '收款日期' in df.columns or '回款日期' in df.columns:
+                date_col = '收款日期' if '收款日期' in df.columns else '回款日期'
+                for _, row in df.iterrows():
+                    if pd.notna(row[date_col]) and pd.notna(row[found_column]):
+                        try:
+                            payment_date = pd.to_datetime(row[date_col])
+                            if payment_date.month == current_month and payment_date.year == current_year:
+                                amount = float(str(row[found_column]).replace(',', '').replace('元', ''))
+                                monthly_revenue += amount
+                        except Exception as e:
+                            continue
+            else:
+                # 如果没有日期列，使用所有有效的收款金额
+                for _, row in df.iterrows():
+                    if pd.notna(row[found_column]):
+                        try:
+                            amount = float(str(row[found_column]).replace(',', '').replace('元', ''))
+                            monthly_revenue += amount
+                        except Exception as e:
+                            continue
+        
+        logger.info(f"本月收款总金额: {monthly_revenue}元")
+        return jsonify({'revenue': monthly_revenue})
+
+    except Exception as e:
+        logger.error(f"获取收款数据失败: {str(e)}")
+        return jsonify({'revenue': 0, 'error': f'获取收款数据失败: {str(e)}'}), 500
 
 @app.route('/get_future_expiring_customers')
 @login_required
@@ -668,6 +730,7 @@ def get_expiring_customers():
                             'jdy_account': str(row.get('用户ID', '')),
                             'company_name': str(row.get('账号-企业名称', '')),
                             'sales_person': sales_person,
+                            'customer_classification': str(row.get('客户分类', '')),
                             'days_until_expiry': days_until_expiry
                         })
                 except Exception as e:
@@ -1133,6 +1196,69 @@ def generate():
             if temp_template:
                 os.unlink(temp_template.name)
                 logger.info(f"清理临时模板文件: {temp_template.name}")
+            if temp_output:
+                os.unlink(temp_output.name)
+                logger.info(f"清理临时输出文件: {temp_output.name}")
+        except Exception as e:
+            logger.error(f"清理临时文件时发生错误: {str(e)}")
+
+@app.route('/generate_quote', methods=['POST'])
+@login_required
+def generate_quote():
+    """生成报价单功能 - 直接使用固定模板"""
+    temp_output = None
+    
+    try:
+        logger.info("开始处理报价单生成请求")
+        
+        # 获取表单数据
+        form_data = request.form.to_dict()
+        logger.info(f"接收到的表单数据: {form_data}")
+        
+        # 验证必填字段
+        required_fields = ['company_name', 'tax_number', 'jdy_account', 'total_amount', 'user_count']
+        for field in required_fields:
+            if not form_data.get(field):
+                logger.error(f"缺少必填字段: {field}")
+                return f'请填写{field}', 400
+        
+        # 检查模板处理器是否可用
+        if not TEMPLATE_HANDLER_AVAILABLE:
+            logger.error("模板处理器不可用")
+            return '模板处理器不可用，请检查依赖包是否正确安装', 500
+        
+        # 使用固定的报价单模板
+        quote_template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates', 'docx_templates', '【2025年续费】 报价单-带变量.doc')
+        if not os.path.exists(quote_template_path):
+            logger.error(f"报价单模板文件不存在: {quote_template_path}")
+            return '报价单模板文件不存在', 500
+        
+        logger.info(f"使用报价单模板: {quote_template_path}")
+        
+        # 创建临时文件用于保存生成的报价单
+        temp_output = tempfile.NamedTemporaryFile(suffix='.docx', delete=False)
+        logger.info(f"创建输出临时文件: {temp_output.name}")
+        
+        # 处理模板
+        handler = TemplateHandler(quote_template_path)
+        output_path = handler.process_template(form_data, temp_output.name)
+        logger.info(f"报价单生成完成，输出文件: {output_path}")
+
+        # 返回生成的文件
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=f"{form_data['company_name']}_报价单_{datetime.now().strftime('%Y%m%d')}.docx",
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+
+    except Exception as e:
+        logger.error(f"生成报价单时发生错误: {str(e)}")
+        return f'生成报价单时发生错误: {str(e)}', 500
+
+    finally:
+        # 清理临时文件
+        try:
             if temp_output:
                 os.unlink(temp_output.name)
                 logger.info(f"清理临时输出文件: {temp_output.name}")
@@ -1788,6 +1914,7 @@ def get_monitor_status():
             'success': False,
             'error': f'获取状态失败: {str(e)}'
         }), 500
+
 
 def auto_start_monitor():
     """应用启动时自动启动监控功能"""
