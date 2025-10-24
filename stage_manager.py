@@ -1,11 +1,22 @@
 import os
-import pandas as pd
 import logging
 import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
 import json
+
+# pandas延迟导入
+pd = None
+
+def ensure_pandas_imported():
+    """确保pandas已导入"""
+    global pd
+    if pd is None:
+        import pandas as pandas_module
+        pd = pandas_module
+        logging.getLogger(__name__).info("pandas已延迟导入到stage_manager")
+    return pd
 
 class StageType(Enum):
     """状态类型枚举"""
@@ -104,8 +115,16 @@ class StageManager:
     
     def _normalize_stage(self, stage: str) -> str:
         """标准化状态名称"""
-        if not stage or pd.isna(stage) or str(stage).strip() == '':
+        if not stage or str(stage).strip() == '':
             return StageType.NA.value
+        
+        # 检查pandas NaN值
+        try:
+            pd = ensure_pandas_imported()
+            if pd.isna(stage):
+                return StageType.NA.value
+        except:
+            pass
         
         stage_str = str(stage).strip()
         
@@ -143,7 +162,7 @@ class StageManager:
         else:
             self.stage_logger.error(f"状态变更失败: {log_message}")
     
-    def _detect_conflicts(self, df: pd.DataFrame, jdy_id: str) -> List[Dict]:
+    def _detect_conflicts(self, df, jdy_id: str) -> List[Dict]:
         """检测状态冲突"""
         conflicts = []
         
@@ -181,6 +200,7 @@ class StageManager:
                 
                 # 3. 读取Excel文件
                 try:
+                    pd = ensure_pandas_imported()
                     df = pd.read_excel(self.excel_path)
                 except Exception as e:
                     error_msg = f"读取Excel文件失败: {str(e)}"
@@ -223,7 +243,8 @@ class StageManager:
                 validation_errors = []
                 
                 for index in matching_rows.index:
-                    current_stage = df.loc[index, stage_column] if pd.notna(df.loc[index, stage_column]) else ''
+                    stage_value = df.loc[index, stage_column]
+                    current_stage = stage_value if (pd.notna(stage_value) if pd else stage_value is not None) else ''
                     current_normalized = self._normalize_stage(current_stage)
                     
                     # 状态转换校验
@@ -332,6 +353,7 @@ class StageManager:
         }
         
         try:
+            pd = ensure_pandas_imported()
             df = pd.read_excel(self.excel_path)
             
             for update in updates:
@@ -369,7 +391,7 @@ class StageManager:
                 current_stage = ''
                 if stage_column in df.columns:
                     current_stage = df.loc[matching_rows.index[0], stage_column]
-                    current_stage = current_stage if pd.notna(current_stage) else ''
+                    current_stage = current_stage if (pd.notna(current_stage) if pd else current_stage is not None) else ''
                 
                 is_valid, validation_msg = self._validate_stage_transition(current_stage, target_stage)
                 

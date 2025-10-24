@@ -1,13 +1,26 @@
 from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, session
 import os
 import tempfile
-import pandas as pd
+# import pandas as pd  # 延迟导入以避免启动时超时
 from datetime import datetime
 import logging
 import threading
 import time
 from pathlib import Path
 import re
+
+# 全局变量用于延迟导入
+pd = None
+
+def ensure_pandas_imported():
+    """确保pandas已导入"""
+    global pd
+    if pd is None:
+        logger.info("开始导入pandas...")
+        import pandas as pandas_module
+        pd = pandas_module
+        logger.info("pandas导入完成")
+    return pd
 
 # 导入Flask相关模块
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
@@ -111,6 +124,66 @@ monitor_results = {'recent_contracts': [], 'updated_contracts': [], 'last_check'
 # 已处理文件记录（文件路径 -> 处理时间戳）
 processed_files = {}
 
+# 销售代表姓名标准化函数
+def normalize_sales_name(sales_name):
+    """
+    标准化销售代表姓名，解决大小写不一致问题
+    例如：Esther.zhu 和 Esther.Zhu 都标准化为 Esther.Zhu
+    """
+    if not sales_name or str(sales_name).lower() == 'nan':
+        return ''
+    
+    # 检查是否为pandas的NaN值
+    try:
+        pd = ensure_pandas_imported()
+        if pd.isna(sales_name):
+            return ''
+    except:
+        # 如果pandas不可用，使用简单的检查
+        if sales_name is None or (hasattr(sales_name, '__len__') and len(str(sales_name).strip()) == 0):
+            return ''
+    
+    name = str(sales_name).strip()
+    if not name:
+        return ''
+    
+    # 特殊处理已知的销售代表姓名
+    name_lower = name.lower()
+    if name_lower == 'esther.zhu':
+        return 'Esther.Zhu'
+    elif name_lower == 'mia.mi':
+        return 'Mia.Mi'
+    
+    # 对于其他姓名，保持原有格式但确保首字母大写
+    return name
+
+def get_normalized_sales_person(row):
+    """
+    从数据行中获取标准化的销售代表姓名
+    优先使用续费责任销售，如果为空则使用责任销售中英文
+    """
+    sales_raw = row.get('续费责任销售', '')
+    
+    # 检查是否为空值
+    is_empty = False
+    if not sales_raw or sales_raw == '' or str(sales_raw).lower() == 'nan':
+        is_empty = True
+    else:
+        # 检查是否为pandas的NaN值
+        try:
+            pd = ensure_pandas_imported()
+            if pd.isna(sales_raw):
+                is_empty = True
+        except:
+            pass
+    
+    if is_empty:
+        sales_person = str(row.get('责任销售中英文', ''))
+    else:
+        sales_person = str(sales_raw)
+    
+    return normalize_sales_name(sales_person)
+
 # 健康检查端点
 @app.route('/health')
 def health_check():
@@ -183,6 +256,7 @@ def load_customer_data():
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
             return None
+        pd = ensure_pandas_imported()
         df = pd.read_excel(excel_path)
         return df
     except Exception as e:
@@ -244,6 +318,7 @@ def get_monthly_revenue():
             return jsonify({'revenue': 0, 'error': '数据文件不存在'}), 500
 
         try:
+            ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
@@ -301,6 +376,9 @@ def get_monthly_revenue():
 @login_required
 def get_future_expiring_customers():
     try:
+        # 获取筛选参数
+        sales_filter = request.args.get('sales_filter', 'all')
+        logger.info(f"获取未来到期客户，销售筛选: {sales_filter}")
         # 检查文件是否存在
         excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
         logger.info(f"尝试读取文件: {excel_path}")
@@ -309,6 +387,7 @@ def get_future_expiring_customers():
             return jsonify({'error': '数据文件不存在'}), 500
 
         try:
+            ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
@@ -327,8 +406,7 @@ def get_future_expiring_customers():
         days_30_later = now + pd.Timedelta(days=30)
         
         # 筛选出23-30天内将要过期的客户
-        esther_customers = []
-        other_customers = []
+        future_customers = []
         
         for _, row in df.iterrows():
             if pd.notna(row['到期日期']):
@@ -336,12 +414,12 @@ def get_future_expiring_customers():
                     expiry_date = pd.to_datetime(row['到期日期'])
                     # 如果过期时间在23天后和30天后之间
                     if days_23_later <= expiry_date <= days_30_later:
-                        # 处理责任销售字段 - 优先使用续费责任销售，如果为空则使用责任销售中英文
-                        sales_raw = row.get('续费责任销售', '')
-                        if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
-                            sales_person = str(row.get('责任销售中英文', ''))
-                        else:
-                            sales_person = str(sales_raw)
+                        # 使用标准化函数获取销售代表姓名
+                        sales_person = get_normalized_sales_person(row)
+                        
+                        # 应用销售代表筛选
+                        if sales_filter != 'all' and sales_filter != sales_person:
+                            continue
                         
                         customer_info = {
                             'id': str(row.get('用户ID', '')),
@@ -351,29 +429,65 @@ def get_future_expiring_customers():
                             'sales_person': sales_person
                         }
                         
-                        # 根据续费责任销售分类（使用处理后的sales_person）
-                        if '朱晓琳' in sales_person or 'Esther' in sales_person:
-                            esther_customers.append(customer_info)
-                        else:
-                            other_customers.append(customer_info)
+                        future_customers.append(customer_info)
                             
                 except Exception as e:
                     logger.warning(f"日期转换错误: {str(e)}")
                     continue
         
         # 按过期日期排序
-        esther_customers.sort(key=lambda x: x['expiry_date'])
-        other_customers.sort(key=lambda x: x['expiry_date'])
+        future_customers.sort(key=lambda x: x['expiry_date'])
         
-        logger.info(f"找到{len(esther_customers)}个Esther负责的即将过期客户和{len(other_customers)}个其他销售负责的即将过期客户")
+        logger.info(f"找到{len(future_customers)}个即将过期的客户（筛选条件：{sales_filter}）")
         return jsonify({
-            'esther_customers': esther_customers,
-            'other_customers': other_customers
+            'future_customers': future_customers
         })
 
     except Exception as e:
         logger.error(f"获取未来即将过期客户失败: {str(e)}")
         return jsonify({'error': f'获取未来即将过期客户失败: {str(e)}'}), 500
+
+@app.route('/get_sales_representatives')
+@login_required
+def get_sales_representatives():
+    try:
+        # 检查文件是否存在
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件获取销售代表列表: {excel_path}")
+        if not os.path.exists(excel_path):
+            logger.error(f"文件不存在: {excel_path}")
+            return jsonify({'error': '数据文件不存在'}), 500
+
+        try:
+            ensure_pandas_imported()
+            df = pd.read_excel(excel_path)
+            logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+        except Exception as e:
+            logger.error(f"Excel读取错误: {str(e)}")
+            return jsonify({'error': '数据文件读取失败'}), 500
+
+        # 收集所有销售代表姓名
+        sales_representatives = set()
+        
+        for _, row in df.iterrows():
+            # 使用标准化函数获取销售代表姓名
+            sales_person = get_normalized_sales_person(row)
+            
+            # 添加到集合中（自动去重）
+            if sales_person:
+                sales_representatives.add(sales_person)
+        
+        # 转换为排序列表
+        sales_list = sorted(list(sales_representatives))
+        
+        logger.info(f"找到{len(sales_list)}个销售代表")
+        return jsonify({
+            'sales_representatives': sales_list
+        })
+
+    except Exception as e:
+        logger.error(f"获取销售代表列表失败: {str(e)}")
+        return jsonify({'error': f'获取销售代表列表失败: {str(e)}'}), 500
 
 @app.route('/get_unsigned_customers')
 @login_required
@@ -391,6 +505,7 @@ def get_unsigned_customers():
             return jsonify({'customers': [], 'error': '数据文件不存在'}), 500
 
         try:
+            ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
@@ -613,6 +728,14 @@ def export_unsigned_customers():
 @login_required
 def get_expiring_customers():
     try:
+        # 获取筛选参数
+        sales_filter = request.args.get('sales_filter', 'all')
+        test_mode = request.args.get('test_mode', 'false').lower() == 'true'
+        logger.info(f"=== API调用开始 ===")
+        logger.info(f"请求参数 - sales_filter: {sales_filter}, test_mode: {test_mode}")
+        logger.info(f"原始参数 - sales_filter: {request.args.get('sales_filter')}, test_mode: {request.args.get('test_mode')}")
+        logger.info(f"获取到期客户，销售筛选: {sales_filter}, 测试模式: {test_mode}")
+        
         # 获取当前日期
         now = datetime.now()
         today = now.date()
@@ -625,6 +748,7 @@ def get_expiring_customers():
             return jsonify({'expiring_customers': [], 'error': '数据文件不存在', 'today_date': today.strftime('%Y年%m月%d日')})
 
         try:
+            ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
@@ -674,7 +798,13 @@ def get_expiring_customers():
                     current_date += pd.Timedelta(days=1)
                 break
         
-        if is_before_holiday:
+        if test_mode:
+            # 测试模式：强制显示明天到期的客户
+            tomorrow = today + pd.Timedelta(days=1)
+            target_dates = [tomorrow]
+            reminder_type = "测试模式 - 明天到期提醒"
+            logger.info("测试模式，强制提醒明天到期的客户")
+        elif is_before_holiday:
             # 节假日前一天：提醒节假日期间到期的客户
             target_dates = holiday_period
             reminder_type = f"节假日期间到期提醒（{holiday_period[0].strftime('%m月%d日')}至{holiday_period[-1].strftime('%m月%d日')}）"
@@ -704,17 +834,23 @@ def get_expiring_customers():
         
         # 筛选出目标日期到期的客户
         expiring_customers = []
+        total_expiring = 0
+        filtered_out = 0
+        
         for _, row in df.iterrows():
             if pd.notna(row['到期日期']):
                 try:
                     expiry_date = pd.to_datetime(row['到期日期']).date()
                     if expiry_date in target_dates:
-                        # 处理责任销售字段
-                        sales_raw = row.get('续费责任销售', '')
-                        if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
-                            sales_person = str(row.get('责任销售中英文', ''))
-                        else:
-                            sales_person = str(sales_raw)
+                        total_expiring += 1
+                        # 使用标准化函数获取销售代表姓名
+                        sales_person = get_normalized_sales_person(row)
+                        
+                        # 应用销售代表筛选
+                        if sales_filter != 'all' and sales_filter != sales_person:
+                            filtered_out += 1
+                            logger.info(f"筛选掉客户: {row.get('账号-企业名称', '')} | 销售: {sales_person} | 筛选条件: {sales_filter}")
+                            continue
                         
                         # 计算距离到期的天数
                         days_until_expiry = (expiry_date - today).days
@@ -739,6 +875,9 @@ def get_expiring_customers():
         
         # 按到期日期排序
         expiring_customers.sort(key=lambda x: x['days_until_expiry'])
+        
+        # 记录筛选统计信息
+        logger.info(f"筛选统计 - 总到期客户: {total_expiring}, 筛选掉: {filtered_out}, 最终结果: {len(expiring_customers)}, 筛选条件: {sales_filter}")
         
         if len(expiring_customers) == 0:
             # 根据提醒类型显示更具体的信息
@@ -1943,7 +2082,19 @@ if __name__ == '__main__':
         host = os.environ.get('HOST', 'localhost')
     debug = os.environ.get('FLASK_ENV') != 'production'
     
-    # 应用启动时自动启动监控
-    auto_start_monitor()
+    print(f"正在启动Flask应用...")
+    print(f"端口: {port}")
+    print(f"主机: {host}")
+    print(f"调试模式: {debug}")
+    print(f"环境: {os.environ.get('FLASK_ENV', 'development')}")
+    
+    # 应用启动时自动启动监控 - 临时禁用用于调试
+    # try:
+    #     auto_start_monitor()
+    #     print("自动监控启动完成")
+    # except Exception as e:
+    #     print(f"自动监控启动失败: {str(e)}")
+    print("自动监控已临时禁用用于调试")
 
+    print("开始启动Flask服务器...")
     app.run(debug=debug, port=port, host=host)

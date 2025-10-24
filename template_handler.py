@@ -161,7 +161,7 @@ class TemplateHandler:
         try:
             amount = float(amount_str)
             if amount == 0:
-                return "零元整"
+                return "零圆整"
             
             # 简化的中文数字转换
             units = ['', '十', '百', '千', '万']
@@ -170,24 +170,24 @@ class TemplateHandler:
             # 处理整数部分
             integer_part = int(amount)
             if integer_part == 0:
-                return "零元整"
+                return "零圆整"
             
             # 简单转换逻辑（适用于常见金额）
             if integer_part < 10:
-                return f"{digits[integer_part]}元整"
+                return f"{digits[integer_part]}圆整"
             elif integer_part < 100:
                 tens = integer_part // 10
                 ones = integer_part % 10
                 if ones == 0:
-                    return f"{digits[tens]}十元整"
+                    return f"{digits[tens]}十圆整"
                 else:
-                    return f"{digits[tens]}十{digits[ones]}元整"
+                    return f"{digits[tens]}十{digits[ones]}圆整"
             else:
                 # 对于更大的数字，返回简化格式
-                return f"{integer_part}元整"
+                return f"{integer_part}圆整"
                 
         except (ValueError, TypeError):
-            return "零元整"
+            return "零圆整"
 
     def get_template_variables(self) -> List[str]:
         """

@@ -1,6 +1,255 @@
 // 全局变量声明
 let isMonitoring = false;
 
+// 显示销售代表筛选模态框
+function showSalesFilterModal(type) {
+    // 移除现有模态框
+    const existingModal = document.getElementById('salesFilterModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 创建模态框背景
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.id = 'salesFilterModal';
+    modalBackdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    `;
+    
+    // 创建模态框内容
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        width: 300px;
+        max-height: 400px;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    `;
+    
+    // 模态框标题
+    const title = document.createElement('h3');
+    title.textContent = '选择销售代表';
+    title.style.cssText = `
+        margin: 0 0 15px 0;
+        color: #333;
+        text-align: center;
+    `;
+    
+    // 加载中提示
+    const loading = document.createElement('div');
+    loading.textContent = '正在加载销售代表列表...';
+    loading.style.cssText = `
+        text-align: center;
+        color: #666;
+        padding: 20px;
+    `;
+    
+    modalContent.appendChild(title);
+    modalContent.appendChild(loading);
+    modalBackdrop.appendChild(modalContent);
+    document.body.appendChild(modalBackdrop);
+    
+    // 点击背景关闭模态框
+    modalBackdrop.addEventListener('click', function(e) {
+        if (e.target === modalBackdrop) {
+            modalBackdrop.remove();
+        }
+    });
+    
+    // 获取销售代表列表
+    fetch('/get_sales_representatives')
+        .then(response => response.json())
+        .then(data => {
+            loading.remove();
+            
+            if (data.error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.textContent = '获取销售代表列表失败: ' + data.error;
+                errorDiv.style.color = '#e74c3c';
+                errorDiv.style.textAlign = 'center';
+                modalContent.appendChild(errorDiv);
+                return;
+            }
+            
+            // 创建销售代表选项
+            const salesList = data.sales_representatives || [];
+            
+            // 添加"全部"选项
+            const allOption = document.createElement('button');
+            allOption.textContent = '全部';
+            allOption.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin: 5px 0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background: #f8f9fa;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+            allOption.addEventListener('click', function() {
+                applySalesFilter('all', type);
+                modalBackdrop.remove();
+            });
+            modalContent.appendChild(allOption);
+            
+            // 添加具体销售代表选项
+            salesList.forEach(salesName => {
+                if (salesName && salesName.trim()) {
+                    const option = document.createElement('button');
+                    option.textContent = salesName;
+                    option.style.cssText = `
+                        width: 100%;
+                        padding: 10px;
+                        margin: 5px 0;
+                        border: 1px solid #ddd;
+                        border-radius: 4px;
+                        background: white;
+                        cursor: pointer;
+                        font-size: 14px;
+                    `;
+                    option.addEventListener('mouseenter', function() {
+                        this.style.background = '#e9ecef';
+                    });
+                    option.addEventListener('mouseleave', function() {
+                        this.style.background = 'white';
+                    });
+                    option.addEventListener('click', function() {
+                        applySalesFilter(salesName, type);
+                        modalBackdrop.remove();
+                    });
+                    modalContent.appendChild(option);
+                }
+            });
+            
+            // 添加关闭按钮
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '取消';
+            closeBtn.style.cssText = `
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0 0 0;
+                border: 1px solid #6c757d;
+                border-radius: 4px;
+                background: #6c757d;
+                color: white;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+            closeBtn.addEventListener('click', function() {
+                modalBackdrop.remove();
+            });
+            modalContent.appendChild(closeBtn);
+        })
+        .catch(error => {
+            loading.remove();
+            const errorDiv = document.createElement('div');
+            errorDiv.textContent = '网络错误，请稍后重试';
+            errorDiv.style.color = '#e74c3c';
+            errorDiv.style.textAlign = 'center';
+            modalContent.appendChild(errorDiv);
+        });
+}
+
+// 应用销售代表筛选
+function applySalesFilter(salesName, type) {
+    if (type === 'expiring') {
+        // 为到期客户提醒看板应用筛选
+        fetchExpiringCustomersWithFilter(salesName);
+    } else if (type === 'future') {
+        // 为未来30天客户看板应用筛选
+        fetchFutureCustomersWithFilter(salesName);
+    }
+}
+
+// 获取筛选后的到期客户
+function fetchExpiringCustomersWithFilter(salesFilter) {
+    const url = `/get_expiring_customers?sales_filter=${encodeURIComponent(salesFilter)}`;
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('获取到期客户失败:', data.error);
+                return;
+            }
+            
+            const customers = data.expiring_customers || [];
+            const message = customers.length === 0 ? 
+                `😊 ${salesFilter === 'all' ? '今天' : salesFilter + '负责的客户中'}没有即将到期的客户` : '';
+            
+            showExpiringCustomersAlert(customers, data.reminder_type, data.today_date, message);
+        })
+        .catch(error => {
+            console.error('获取到期客户失败:', error);
+        });
+}
+
+// 获取筛选后的未来30天客户
+function fetchFutureCustomersWithFilter(salesFilter) {
+    const url = `/get_future_expiring_customers?sales_filter=${encodeURIComponent(salesFilter)}`;
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('获取未来客户失败:', data.error);
+                return;
+            }
+            
+            // 更新未来30天客户看板显示
+            updateFutureCustomersDisplay(data.future_customers || [], salesFilter);
+        })
+        .catch(error => {
+            console.error('获取未来客户失败:', error);
+        });
+}
+
+// 更新未来30天客户看板显示
+function updateFutureCustomersDisplay(customers, salesFilter) {
+    const unsignedList = document.getElementById('unsignedCustomersList');
+    if (!unsignedList) return;
+    
+    if (customers.length === 0) {
+        const filterLabel = salesFilter === 'all' ? '全部' : salesFilter;
+        unsignedList.innerHTML = `<div style="text-align: center; color: #666; padding: 10px;">😊 ${filterLabel}负责的客户中没有未来30天内到期的客户</div>`;
+        return;
+    }
+    
+    let html = '';
+    
+    // 添加筛选提示
+    if (salesFilter !== 'all') {
+        html += `<div style="background: #e3f2fd; padding: 8px; margin-bottom: 10px; border-radius: 4px; text-align: center; font-size: 12px; color: #1976d2;">
+            当前筛选：${salesFilter} (${customers.length}个客户)
+        </div>`;
+    }
+    
+    customers.forEach(customer => {
+        html += `
+            <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
+                <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${customer.expiry_date}</div>
+                <div style="font-size: 11px; color: #333; line-height: 1.3;">
+                    <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
+                    <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
+                    <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    unsignedList.innerHTML = html;
+}
+
 // 获取即将到期的客户并显示提醒看板
 function fetchExpiringCustomers() {
     fetch('/get_expiring_customers', {
@@ -121,6 +370,18 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     const titleSpan = document.createElement('span');
     titleSpan.textContent = '📅 到期客户提醒';
     
+    // 添加筛选按钮
+    const filterBtn = document.createElement('button');
+    filterBtn.textContent = '🔍 筛选';
+    filterBtn.style.background = 'rgba(255,255,255,0.2)';
+    filterBtn.style.border = '1px solid rgba(255,255,255,0.3)';
+    filterBtn.style.color = '#fff';
+    filterBtn.style.cursor = 'pointer';
+    filterBtn.style.fontSize = '12px';
+    filterBtn.style.padding = '4px 8px';
+    filterBtn.style.borderRadius = '4px';
+    filterBtn.style.marginRight = '8px';
+    
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.textContent = '×';
@@ -129,9 +390,9 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     closeBtn.style.color = '#fff';
     closeBtn.style.cursor = 'pointer';
     closeBtn.style.fontSize = '18px';
-    closeBtn.style.marginLeft = 'auto';
     
     alertHeader.appendChild(titleSpan);
+    alertHeader.appendChild(filterBtn);
     alertHeader.appendChild(closeBtn);
     alertHeader.style.display = 'flex';
     alertHeader.style.justifyContent = 'space-between';
@@ -205,6 +466,11 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     // 添加关闭按钮事件
     closeBtn.addEventListener('click', function() {
         alertContainer.remove();
+    });
+    
+    // 添加筛选按钮事件
+    filterBtn.addEventListener('click', function() {
+        showSalesFilterModal('expiring');
     });
 }
 
@@ -1293,6 +1559,14 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnRefreshUnsigned').addEventListener('click', function() {
         fetchUnsignedCustomers();
     });
+    
+    // 未来30天客户筛选功能
+    const btnFilterUnsigned = document.getElementById('btnFilterUnsigned');
+    if (btnFilterUnsigned) {
+        btnFilterUnsigned.addEventListener('click', function() {
+            showSalesFilterModal('future');
+        });
+    }
     
     // 绑定自动监控按钮事件
     // 停止监控按钮已移除

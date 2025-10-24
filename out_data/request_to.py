@@ -1,9 +1,17 @@
 import requests
 import json
 import math
-import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+
+# pandas延迟导入
+pd = None
+
+def ensure_pandas_imported():
+    global pd
+    if pd is None:
+        import pandas as pandas_module
+        pd = pandas_module
 
 url = "https://www.jiandaoyun.com/_/data_process/data/find"
 count_url='https://www.jiandaoyun.com/_/data_process/data/count'
@@ -1371,6 +1379,7 @@ with ThreadPoolExecutor(max_workers=5) as executor:  # 设置最大线程数为 
             print(f"第 {page + 1} 页处理失败: {e}")
 
 # 创建 DataFrame 并保存为 Excel
+ensure_pandas_imported()
 df = pd.DataFrame(data_list, dtype="string")
 output_file = "output.xlsx"
 df.to_excel(output_file, index=False)

@@ -307,7 +307,7 @@
         // 数字转中文大写
         function numberToChinese(num) {
             if (num === 0) {
-                return '零元整';
+                return '零圆整';
             }
 
             const chineseNums = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
@@ -355,7 +355,7 @@
             }
 
             let result = strArr.join('').replace(/零+$/, '');
-            return result + '元整';
+            return result + '圆整';
         }
 
         // 更新中文金额
@@ -1533,6 +1533,7 @@
                 <div class="unsigned-header">
                     <h4>未来30天客户看板</h4>
                     <div class="monitor-controls">
+                        <button id="btnFilterUnsigned" class="btn btn-secondary" style="margin-right: 5px;">🔍 筛选</button>
                         <button id="btnRefreshUnsigned" class="btn btn-secondary btn-refresh">刷新</button>
                     </div>
                 </div>
