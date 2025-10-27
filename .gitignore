@@ -29,6 +29,10 @@ uploads/*
 *.tmp
 *.temp
 
+# Sensitive cookies
+cookies.txt
+cookies*.txt
+
 # Output data
 out_data/*.xlsx
 !out_data/.gitkeep
