@@ -1,4 +1,9 @@
 from flask import Flask, render_template, request, send_file, jsonify, redirect, url_for, session
+from jinja2 import TemplateSyntaxError
+try:
+    from docxtpl.exceptions import TemplateError as DocxTplTemplateError
+except Exception:
+    DocxTplTemplateError = None
 import os
 import tempfile
 # import pandas as pd  # 延迟导入以避免启动时超时
@@ -8,6 +13,7 @@ import threading
 import time
 from pathlib import Path
 import re
+from werkzeug.utils import secure_filename
 
 # 全局变量用于延迟导入
 pd = None
@@ -304,6 +310,35 @@ def upload_excel():
 @app.route('/get_last_import_time')
 def get_last_import_time():
     return jsonify({'last_import_time': last_import_time})
+
+# 前端错误日志接收接口（无需登录）
+@app.route('/log_client_error', methods=['POST'])
+def log_client_error():
+    try:
+        data = request.get_json(silent=True) or {}
+        errs = data.get('errors') or []
+        ua = data.get('ua') or request.headers.get('User-Agent', '')
+        page = data.get('page') or request.path
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        count = 0
+        if isinstance(errs, list) and errs:
+            for e in errs:
+                try:
+                    endpoint = e.get('endpoint')
+                    msg = e.get('error')
+                    ts = e.get('time')
+                    logger.warning(f"前端错误: endpoint={endpoint} error={msg} time={ts} ua={ua} page={page} ip={ip}")
+                    count += 1
+                except Exception:
+                    continue
+        else:
+            # 单条错误或格式不标准
+            logger.warning(f"前端错误: {errs} ua={ua} page={page} ip={ip}")
+            count = 1
+        return jsonify({'success': True, 'logged': count}), 200
+    except Exception as exc:
+        logger.error(f"记录前端错误失败: {str(exc)}")
+        return jsonify({'success': False, 'error': '日志记录失败'}), 500
 
 @app.route('/get_monthly_revenue')
 @login_required
@@ -1247,8 +1282,17 @@ def get_template(template_name):
         return '不支持的文件类型', 400
 
     try:
-        # 从docx_templates目录加载模板文件
-        template_path = os.path.join(os.getcwd(), 'templates', 'docx_templates', template_name)
+        # 使用应用根路径定位模板目录，避免工作目录差异
+        template_dir = os.path.join(app.root_path, 'templates', 'docx_templates')
+        # 防止路径穿越攻击：规范化并检查前缀
+        candidate = os.path.normpath(os.path.join(template_dir, template_name))
+        template_dir_abs = os.path.abspath(template_dir)
+        if not candidate.startswith(template_dir_abs + os.sep):
+            logger.error(f"非法模板路径: {candidate}")
+            return '非法模板路径', 400
+
+        template_path = candidate
+
         if not os.path.exists(template_path):
             logger.error(f"模板文件不存在: {template_path}")
             return '模板文件不存在', 404
@@ -1256,7 +1300,7 @@ def get_template(template_name):
         logger.info(f"正在加载模板文件: {template_path}")
         return send_file(
             template_path,
-            as_attachment=False,  # 不作为附件发送，这样浏览器不会下载而是直接传给前端
+            as_attachment=False,
             mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         )
     except Exception as e:
@@ -1312,9 +1356,47 @@ def generate():
             logger.error("模板处理器不可用")
             return '模板处理器不可用，请检查依赖包是否正确安装', 500
             
-        # 处理模板
-        handler = TemplateHandler(temp_template.name)
-        output_path = handler.process_template(form_data, temp_output.name)
+        # 处理模板（扩大异常捕获范围，覆盖初始化与渲染阶段）
+        try:
+            handler = TemplateHandler(temp_template.name)
+            output_path = handler.process_template(form_data, temp_output.name)
+        except TemplateSyntaxError as e:
+            # 针对Jinja模板语法错误进行更友好的提示
+            logger.error(f"模板语法错误: {str(e)}")
+            hint = (
+                "模板语法错误（可能存在多余或不匹配的花括号）。请检查模板中的 Jinja 变量/块是否成对："
+                "'{{ ... }}'、'{% ... %}'、'{# ... #}'；避免出现额外的 '}'。如需在正文中使用花括号，"
+                "请改用全角 '｛｝' 或使用原始块 '{% raw %}...{% endraw %}'."
+            )
+            # 返回结构化错误，前端会优先解析JSON错误
+            return jsonify({
+                'error': f"生成合同时发生错误: {getattr(e, 'message', str(e))}",
+                'hint': hint,
+                'lineno': getattr(e, 'lineno', None)
+            }), 400
+        except Exception as e:
+            # docxtpl 可能包装 Jinja 异常或仅返回错误信息
+            msg = str(e)
+            if (
+                "unexpected '}'" in msg
+                or 'jinja2' in msg.lower()
+                or (DocxTplTemplateError and isinstance(e, DocxTplTemplateError))
+            ):
+                logger.error(f"模板语法错误(兼容抓取): {msg}")
+                hint = (
+                    "模板语法错误（可能存在多余或不匹配的花括号）。请检查模板中的 Jinja 变量/块是否成对："
+                    "'{{ ... }}'、'{% ... %}'、'{# ... #}'；避免出现额外的 '}'。如需在正文中使用花括号，"
+                    "请改用全角 '｛｝' 或使用原始块 '{% raw %}...{% endraw %}'."
+                )
+                return jsonify({
+                    'error': f"生成合同时发生错误: {msg}",
+                    'hint': hint,
+                    'lineno': getattr(e, 'lineno', None)
+                }), 400
+            # 其他错误按服务器错误处理
+            logger.error(f"模板处理失败: {msg}")
+            return jsonify({'error': f'生成合同时发生错误: {msg}'}), 500
+
         logger.info(f"合同生成完成，输出文件: {output_path}")
 
         # 返回生成的文件
@@ -1327,7 +1409,7 @@ def generate():
 
     except Exception as e:
         logger.error(f"发生错误: {str(e)}")
-        return f'生成合同时发生错误: {str(e)}', 500
+        return jsonify({'error': f'生成合同时发生错误: {str(e)}'}), 500
 
     finally:
         # 清理临时文件

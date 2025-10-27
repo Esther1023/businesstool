@@ -269,7 +269,7 @@
         </div>
     </div>
 
-    <script src="/static/script.js"></script>
+    <script src="/static/script.js?v=lightfix"></script>
     <script>
         // 填充测试数据
         function fillTestData() {
@@ -1368,16 +1368,20 @@
             })
                 .then(response => {
                     if (!response.ok) {
+                        const contentType = response.headers.get('content-type') || '';
+                        if (contentType.includes('application/json')) {
+                            return response.json().then(err => {
+                                const parts = [];
+                                if (err && err.error) parts.push(err.error);
+                                if (err && err.hint) parts.push('建议：' + err.hint);
+                                if (err && err.lineno) parts.push('位置：第' + err.lineno + '行');
+                                const msg = parts.length ? parts.join('\n') : `服务器错误 (${response.status})`;
+                                throw new Error(msg);
+                            });
+                        }
                         return response.text().then(text => {
                             console.error('服务器响应错误:', response.status, text);
-                            // 尝试解析JSON错误信息
-                            try {
-                                const errorObj = JSON.parse(text);
-                                throw new Error(errorObj.error || `服务器错误 (${response.status}): ${text}`);
-                            } catch (e) {
-                                // 如果不是JSON，直接显示文本
-                                throw new Error(`服务器错误 (${response.status}): ${text}`);
-                            }
+                            throw new Error(`服务器错误 (${response.status}): ${text}`);
                         });
                     }
                     return response.blob();
@@ -1556,11 +1560,7 @@
                 </div>
             </div>
 
-            <input id="assistAsk" class="assist-input" placeholder="问一句（先本地检索，之后接入知识库/记忆）">
-            <div class="assist-row">
-                <button id="btnAsk" class="btn">问</button>
-                <button id="btnClear" class="btn btn-secondary">清空</button>
-            </div>
+
             <div id="assistAnswer" class="assist-help">提示：生成合同成功后会自动推进到"合同"。</div>
         </div>
     </div>

@@ -1,6 +1,78 @@
 // 全局变量声明
 let isMonitoring = false;
 
+// 安全JSON获取与静态预览检测
+function isStaticPreview() {
+  try {
+    const isTemplates = window.location.pathname.includes('/templates/');
+    const isHttpServer = String(window.location.port || '') === '8081';
+    return isTemplates || isHttpServer;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function safeJsonFetch(url, options = {}, fallbackData = {}) {
+  try {
+    const response = await fetch(url, options);
+    const contentType = response.headers ? (response.headers.get('content-type') || '') : '';
+    if (!response.ok || !contentType.includes('application/json')) {
+      return { ...fallbackData, _static_preview: true };
+    }
+    return await response.json();
+  } catch (error) {
+    return { ...fallbackData, _static_preview: true, error: error && error.message ? error.message : String(error) };
+  }
+}
+
+// 简单的API错误记录器，便于后续监控与排查
+function logApiError(endpoint, error) {
+  if (!error) return;
+  try {
+    window._apiErrors = window._apiErrors || [];
+    window._apiErrors.push({
+      endpoint,
+      error: typeof error === 'string' ? error : (error && error.message) ? error.message : String(error),
+      time: new Date().toISOString(),
+      page: window.location.pathname
+    });
+  } catch (_) {}
+  console.error('API调用错误:', endpoint, error);
+
+  // 将错误上报到后端日志/监控系统
+  try {
+    if (!isStaticPreview()) {
+      const payload = {
+        errors: window._apiErrors.slice(-1),
+        ua: navigator.userAgent,
+        page: window.location.pathname
+      };
+      fetch('/log_client_error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 轻量聚合：延迟批量上报最近错误，避免频繁请求
+  try {
+    clearTimeout(window._errorFlushTimer);
+    window._errorFlushTimer = setTimeout(() => {
+      if (isStaticPreview()) return;
+      const errs = (window._apiErrors || []).slice(-20);
+      if (!errs.length) return;
+      fetch('/log_client_error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ errors: errs, ua: navigator.userAgent, page: window.location.pathname })
+      }).catch(() => {});
+    }, 1000);
+  } catch (_) {}
+}
+
 // 显示销售代表筛选模态框
 function showSalesFilterModal(type) {
     // 移除现有模态框
@@ -173,44 +245,61 @@ function applySalesFilter(salesName, type) {
     }
 }
 
-// 获取筛选后的到期客户
+// 获取筛选后的到期客户（静态预览友好）
 function fetchExpiringCustomersWithFilter(salesFilter) {
     const url = `/get_expiring_customers?sales_filter=${encodeURIComponent(salesFilter)}`;
-    fetch(url)
-        .then(response => response.json())
+    const fallback = {
+        expiring_customers: [],
+        reminder_type: 'daily',
+        today_date: new Date().toISOString().slice(0,10),
+        message: `静态预览模式：后端未启动，${salesFilter==='all'?'暂无到期客户数据':`${salesFilter}负责的客户暂无到期客户`}`
+    };
+
+    // 预加载指示：如有现存看板，先显示统一的加载状态
+    const sc = document.getElementById('smart-calculator');
+    if (sc) {
+        const contentEl = sc.querySelector('.calculator-display');
+        if (contentEl) contentEl.innerHTML = '<div class="loading">加载中...</div>';
+    }
+
+    safeJsonFetch(url, { credentials: 'same-origin' }, fallback)
         .then(data => {
+            if (!data) return;
             if (data.error) {
-                console.error('获取到期客户失败:', data.error);
+                logApiError(url, data.error);
+                showExpiringCustomersAlert([], fallback.reminder_type, fallback.today_date, '暂时无法获取到期客户数据');
                 return;
             }
-            
             const customers = data.expiring_customers || [];
             const message = customers.length === 0 ? 
-                `😊 ${salesFilter === 'all' ? '今天' : salesFilter + '负责的客户中'}没有即将到期的客户` : '';
-            
-            showExpiringCustomersAlert(customers, data.reminder_type, data.today_date, message);
-        })
-        .catch(error => {
-            console.error('获取到期客户失败:', error);
+                (data.message || `😊 ${salesFilter === 'all' ? '今天' : salesFilter + '负责的客户中'}没有即将到期的客户`) : '';
+            // 静态预览也记录一次日志，便于确认前端行为
+            if (data._static_preview) {
+                logApiError(url, '静态预览：后端未连接');
+            }
+            showExpiringCustomersAlert(customers, data.reminder_type || fallback.reminder_type, data.today_date || fallback.today_date, message);
         });
 }
 
-// 获取筛选后的未来30天客户
+// 获取筛选后的未来30天客户（静态预览友好）
 function fetchFutureCustomersWithFilter(salesFilter) {
     const url = `/get_future_expiring_customers?sales_filter=${encodeURIComponent(salesFilter)}`;
-    fetch(url)
-        .then(response => response.json())
+    const fallback = { future_customers: [], _static_preview: true };
+
+    // 显示加载状态
+    const unsignedList = document.getElementById('unsignedCustomersList');
+    if (unsignedList) {
+        unsignedList.innerHTML = '<div class="loading">加载中...</div>';
+    }
+
+    safeJsonFetch(url, { credentials: 'same-origin' }, fallback)
         .then(data => {
-            if (data.error) {
-                console.error('获取未来客户失败:', data.error);
-                return;
+            const errorMsg = data && data.error ? data.error : (data && data._static_preview ? '静态预览：后端未连接' : '');
+            if (errorMsg) {
+                logApiError(url, errorMsg);
             }
-            
-            // 更新未来30天客户看板显示
-            updateFutureCustomersDisplay(data.future_customers || [], salesFilter);
-        })
-        .catch(error => {
-            console.error('获取未来客户失败:', error);
+            // 更新未来30天客户看板显示（出错或静态预览时显示空列表提示）
+            updateFutureCustomersDisplay((data && Array.isArray(data.future_customers)) ? data.future_customers : [], salesFilter);
         });
 }
 
@@ -221,7 +310,7 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
     
     if (customers.length === 0) {
         const filterLabel = salesFilter === 'all' ? '全部' : salesFilter;
-        unsignedList.innerHTML = `<div style="text-align: center; color: #666; padding: 10px;">😊 ${filterLabel}负责的客户中没有未来30天内到期的客户</div>`;
+        unsignedList.innerHTML = `<div style="text-align: center; color: var(--text-color); padding: 10px;">😊 ${filterLabel}负责的客户中没有未来30天内到期的客户</div>`;
         return;
     }
     
@@ -250,40 +339,32 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
     unsignedList.innerHTML = html;
 }
 
-// 获取即将到期的客户并显示提醒看板
+// 获取即将到期的客户并显示提醒看板（静态预览友好）
 function fetchExpiringCustomers() {
-    fetch('/get_expiring_customers', {
-        credentials: 'same-origin'
+    safeJsonFetch('/get_expiring_customers', { credentials: 'same-origin' }, {
+        expiring_customers: [],
+        reminder_type: 'daily',
+        today_date: new Date().toISOString().slice(0,10),
+        message: '静态预览模式：API未启动，暂无到期客户数据'
     })
-        .then(response => {
-            if (response.status === 302 || response.url.includes('/login')) {
-                console.log('需要登录才能获取到期客户数据');
-                return null;
-            }
-            const contentType = response.headers.get('content-type');
-            if (!response.ok || !contentType || !contentType.includes('application/json')) {
-                throw new Error('获取到期客户数据失败');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data) return;
-            
-            if (data.error) {
-                console.error('获取到期客户失败:', data.error);
-                return;
-            }
-            
-            if (data.expiring_customers && data.expiring_customers.length > 0) {
-                showExpiringCustomersAlert(data.expiring_customers, data.reminder_type, data.today_date);
-            } else if (data.message) {
-                // 如果没有到期客户但有消息，也显示提醒看板
-                showExpiringCustomersAlert([], data.reminder_type, data.today_date, data.message);
-            }
-        })
-        .catch(error => {
-            console.error('获取到期客户失败:', error);
-        });
+    .then(data => {
+        if (!data) return;
+        if (data.error) {
+            // 在UI上提示，不抛错，同时记录错误
+            logApiError('/get_expiring_customers', data.error);
+            showExpiringCustomersAlert([], data.reminder_type, data.today_date, '暂时无法获取到期客户数据');
+            return;
+        }
+        if (data._static_preview) {
+            logApiError('/get_expiring_customers', '静态预览：后端未连接');
+        }
+        if (data.expiring_customers && data.expiring_customers.length > 0) {
+            showExpiringCustomersAlert(data.expiring_customers, data.reminder_type, data.today_date);
+        } else {
+            const msg = data.message || '今天没有即将到期的客户';
+            showExpiringCustomersAlert([], data.reminder_type, data.today_date, msg);
+        }
+    });
 }
 
 // 快捷按钮链接配置
@@ -370,17 +451,10 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     const titleSpan = document.createElement('span');
     titleSpan.textContent = '📅 到期客户提醒';
     
-    // 添加筛选按钮
+    // 添加筛选按钮（使用高对比度样式类）
     const filterBtn = document.createElement('button');
     filterBtn.textContent = '🔍 筛选';
-    filterBtn.style.background = 'rgba(255,255,255,0.2)';
-    filterBtn.style.border = '1px solid rgba(255,255,255,0.3)';
-    filterBtn.style.color = '#fff';
-    filterBtn.style.cursor = 'pointer';
-    filterBtn.style.fontSize = '12px';
-    filterBtn.style.padding = '4px 8px';
-    filterBtn.style.borderRadius = '4px';
-    filterBtn.style.marginRight = '8px';
+    filterBtn.className = 'calculator-filter-btn';
     
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
@@ -391,12 +465,21 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     closeBtn.style.cursor = 'pointer';
     closeBtn.style.fontSize = '18px';
     
-    alertHeader.appendChild(titleSpan);
-    alertHeader.appendChild(filterBtn);
-    alertHeader.appendChild(closeBtn);
-    alertHeader.style.display = 'flex';
-    alertHeader.style.justifyContent = 'space-between';
+    // 网格布局：左侧筛选，中间标题，右侧关闭
+    alertHeader.style.display = 'grid';
+    alertHeader.style.gridTemplateColumns = 'auto 1fr auto';
     alertHeader.style.alignItems = 'center';
+
+    alertHeader.appendChild(filterBtn);
+    alertHeader.appendChild(titleSpan);
+    alertHeader.appendChild(closeBtn);
+
+    // 标题在网格中居中，不受左右按钮宽度影响
+    titleSpan.style.justifySelf = 'center';
+    titleSpan.style.color = '#1f2a37';
+
+    // 关闭按钮颜色与标题一致，避免过白
+    closeBtn.style.color = '#1f2a37';
 
     // 创建内容区域
     const alertContent = document.createElement('div');
@@ -450,9 +533,10 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     } else if (message) {
         // 显示无到期客户的消息
         const messageDiv = document.createElement('div');
+        messageDiv.className = 'loading';
         messageDiv.style.textAlign = 'center';
         messageDiv.style.padding = '20px';
-        messageDiv.style.color = '#52c41a';
+        messageDiv.style.color = 'var(--text-color)';
         messageDiv.style.fontSize = '16px';
         messageDiv.textContent = message;
         alertContent.appendChild(messageDiv);
@@ -527,6 +611,8 @@ function showFutureExpiringCustomersDashboard(estherCustomers, otherCustomers) {
     memoTextarea.style.backgroundColor = 'transparent';
     memoTextarea.style.color = 'var(--text-color)';
     memoTextarea.style.fontFamily = 'inherit';
+    // 文本换行设置，避免横向滚动
+    memoTextarea.setAttribute('wrap', 'soft');
 
     // 从本地存储加载备忘录内容
     const savedMemo = localStorage.getItem('memo-content');
@@ -1490,7 +1576,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const assistClose = document.getElementById('assistClose');
     const assistId = document.getElementById('assistId');
     const assistMemo = document.getElementById('assistMemo');
-    const assistAsk = document.getElementById('assistAsk');
     const assistAnswer = document.getElementById('assistAnswer');
     
     // 悬浮球点击事件
@@ -1557,7 +1642,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 未签订合同客户功能
     document.getElementById('btnRefreshUnsigned').addEventListener('click', function() {
-        fetchUnsignedCustomers();
+        fetchFutureCustomersWithFilter('all');
     });
     
     // 未来30天客户筛选功能
@@ -1579,15 +1664,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 问答功能
-    document.getElementById('btnAsk').addEventListener('click', function() {
-        askQuestion();
-    });
-    
-    document.getElementById('btnClear').addEventListener('click', function() {
-        clearAssistPanel();
-    });
-    
+
     // 初始化时加载未签订合同客户 - 默认显示NA状态
     fetchUnsignedCustomers('na');
     
@@ -1752,81 +1829,89 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // 获取未签订合同客户
-    function fetchUnsignedCustomers(statusFilter = 'all') {
+    // 获取未签订合同客户（静态预览友好）
+    async function fetchUnsignedCustomers(statusFilter = 'all') {
         const unsignedList = document.getElementById('unsignedCustomersList');
         if (!unsignedList) return;
         
         unsignedList.innerHTML = '<div class="loading" style="text-align: center; color: #666; padding: 10px;">加载中...</div>';
         
         const url = `/get_unsigned_customers?status=${statusFilter}`;
-        fetch(url, {
-            credentials: 'same-origin'
-        })
-        .then(response => {
-            if (response.status === 302 || response.url.includes('/login')) {
-                unsignedList.innerHTML = '<div style="text-align: center; color: #666; padding: 10px;">请先登录</div>';
-                return null;
-            }
-            const contentType = response.headers.get('content-type');
-            if (!response.ok || !contentType || !contentType.includes('application/json')) {
-                throw new Error('API服务不可用');
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (!data) return;
-            
-            if (data.error) {
-                unsignedList.innerHTML = `<div style="text-align: center; color: #e74c3c; padding: 10px;">${data.error}</div>`;
-                return;
-            }
-            
-            // 更新状态筛选器
+        const fallback = {
+            available_statuses: [
+                { value: 'all', count: 0 },
+                { value: 'na', count: 0 },
+                { value: 'contract', count: 0 },
+                { value: 'invoice', count: 0 },
+                { value: 'advance_invoice', count: 0 },
+                { value: 'paid', count: 0 },
+                { value: 'invalid', count: 0 },
+                { value: 'upsell', count: 0 },
+                { value: 'lost', count: 0 }
+            ],
+            current_filter: statusFilter,
+            customers: []
+        };
+        
+        const data = await safeJsonFetch(url, { credentials: 'same-origin' }, fallback);
+        
+        if (!data) return;
+        
+        if (data._static_preview && !data.customers?.length) {
+            const filterLabel = getFilterLabel(statusFilter);
+            unsignedList.innerHTML = `<div style="text-align: center; color: var(--text-color); padding: 10px;">🌐 静态预览模式：后端未启动，暂无法获取"${filterLabel}"客户</div>`;
             updateStatusFilter(data.available_statuses, data.current_filter);
-            
-            if (!data.customers || data.customers.length === 0) {
-                const filterLabel = getFilterLabel(statusFilter);
-                unsignedList.innerHTML = `<div style="text-align: center; color: #666; padding: 10px;">😊 最近30天内没有符合"${filterLabel}"条件的客户</div>`;
-                return;
-            }
-            
-            // 显示客户列表 - 不显示数量统计信息
-            let html = '';
-            
-            // 添加导出按钮
-            html += `<div style="margin-bottom: 10px; text-align: center;">
-                <button id="exportUnsignedCustomers" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">📊 导出所有客户列表</button>
-            </div>`;
-            
-            data.customers.forEach(customer => {
-                const stageClass = getStageClass(customer.customer_stage);
-                html += `
-                    <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
-                        <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${customer.expiry_date}</div>
-                        <div style="font-size: 11px; color: #333; line-height: 1.3;">
-                            <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
-                            <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
-                            <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
-                            <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${customer.customer_stage}</span></div>
-                            ${customer.integration_mode ? `<div style="margin-bottom: 2px;"><strong>集成模式:</strong> ${getIntegrationModeTip(customer.integration_mode)}</div>` : ''}
-                        </div>
+            return;
+        }
+        
+        if (data.error) {
+            unsignedList.innerHTML = `<div style="text-align: center; color: #e74c3c; padding: 10px;">${data.error}</div>`;
+            return;
+        }
+        
+        // 更新状态筛选器
+        updateStatusFilter(data.available_statuses, data.current_filter);
+        
+        if (!data.customers || data.customers.length === 0) {
+            const filterLabel = getFilterLabel(statusFilter);
+            unsignedList.innerHTML = `<div style="text-align: center; color: #666; padding: 10px;">😊 最近30天内没有符合"${filterLabel}"条件的客户</div>`;
+            return;
+        }
+        
+        // 显示客户列表 - 不显示数量统计信息
+        let html = '';
+        
+        // 添加导出按钮
+        html += `<div style="margin-bottom: 10px; text-align: center;">
+            <button id="exportUnsignedCustomers" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">📊 导出所有客户列表</button>
+        </div>`;
+        
+        data.customers.forEach(customer => {
+            const stageClass = getStageClass(customer.customer_stage);
+            html += `
+                <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
+                    <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${customer.expiry_date}</div>
+                    <div style="font-size: 11px; color: #333; line-height: 1.3;">
+                        <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
+                        <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
+                        <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
+                        <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${customer.customer_stage}</span></div>
+                        ${customer.integration_mode ? `<div style="margin-bottom: 2px;"><strong>集成模式:</strong> ${getIntegrationModeTip(customer.integration_mode)}</div>` : ''}
                     </div>
-                `;
-            });
-            
-            unsignedList.innerHTML = html;
-            
-            // 为导出按钮添加点击事件
-            document.getElementById('exportUnsignedCustomers').addEventListener('click', function() {
+                </div>
+            `;
+        });
+        
+        unsignedList.innerHTML = html;
+        
+        // 为导出按钮添加点击事件
+        const exportBtn = document.getElementById('exportUnsignedCustomers');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', function() {
                 const exportUrl = '/export_unsigned_customers';
                 window.open(exportUrl, '_blank');
             });
-        })
-        .catch(error => {
-            console.error('获取客户数据错误:', error);
-            unsignedList.innerHTML = '<div style="text-align: center; color: #e74c3c; padding: 10px;">获取数据失败，请稍后重试</div>';
-        });
+        }
     }
 
     // 获取集成模式提醒
@@ -1997,60 +2082,51 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 检查监控状态
+    // 检查监控状态（静态预览友好）
     async function checkMonitorStatus() {
-        try {
-            const response = await fetch('/get_monitor_status', {
-                method: 'GET',
-                credentials: 'same-origin'
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                updateMonitorDisplay(data);
-            }
-        } catch (error) {
-            console.error('检查监控状态失败:', error);
+        const data = await safeJsonFetch('/get_monitor_status', { method: 'GET', credentials: 'same-origin' }, {
+            success: true,
+            enabled: false,
+            last_check: new Date().toISOString(),
+            results: { recent_contracts: [], updated_contracts: [], total_updated: 0 }
+        });
+        if (data && data.success) {
+            updateMonitorDisplay(data);
         }
     }
     
-    // 初始化监控状态
+    // 初始化监控状态（静态预览友好）
     async function initializeMonitorStatus() {
-        try {
-            const response = await fetch('/get_monitor_status', {
-                method: 'GET',
-                credentials: 'same-origin'
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                // 更新监控状态显示
-                isMonitoring = data.enabled;
-                
-                const monitorStatusText = document.getElementById('monitorStatusText');
-                
-                if (monitorStatusText) {
-                    if (data.enabled) {
-                        monitorStatusText.textContent = '自动监控中';
-                        monitorStatusText.style.color = '#48bb78';
-                        
-                        // 开始定期检查监控状态
-                        startStatusCheck();
-                        
-                        console.log('检测到监控已自动启动');
-                    } else {
-                        monitorStatusText.textContent = '已停止';
-                        monitorStatusText.style.color = '#666';
-                    }
+        const data = await safeJsonFetch('/get_monitor_status', { method: 'GET', credentials: 'same-origin' }, {
+            success: true,
+            enabled: false,
+            last_check: new Date().toISOString(),
+            results: { recent_contracts: [], updated_contracts: [], total_updated: 0 }
+        });
+
+        if (data && data.success) {
+            // 更新监控状态显示
+            isMonitoring = !!data.enabled;
+
+            const monitorStatusText = document.getElementById('monitorStatusText');
+
+            if (monitorStatusText) {
+                if (isMonitoring) {
+                    monitorStatusText.textContent = '自动监控中';
+                    monitorStatusText.style.color = '#48bb78';
+
+                    // 开始定期检查监控状态
+                    startStatusCheck();
+
+                    console.log('检测到监控已自动启动');
+                } else {
+                    monitorStatusText.textContent = isStaticPreview() ? '预览模式（未连接后台）' : '已停止';
+                    monitorStatusText.style.color = '#666';
                 }
-                
-                // 更新监控显示
-                updateMonitorDisplay(data);
             }
-        } catch (error) {
-            console.error('初始化监控状态失败:', error);
+
+            // 更新监控显示
+            updateMonitorDisplay(data);
         }
     }
     
@@ -2129,35 +2205,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
 
-    
-    function askQuestion() {
-        const question = assistAsk.value.trim();
-        if (!question) {
-            assistAnswer.textContent = '请输入问题';
-            return;
-        }
-        
-        assistAnswer.textContent = '正在思考...';
-        
-        // 简单的本地检索逻辑
-        const savedMemos = JSON.parse(localStorage.getItem('assistMemos') || '[]');
-        const matchingMemos = savedMemos.filter(memo => 
-            memo.content.toLowerCase().includes(question.toLowerCase())
-        );
-        
-        if (matchingMemos.length > 0) {
-            const result = `找到${matchingMemos.length}条相关记录:\n` + 
-                          matchingMemos.slice(0, 3).map(memo => `• ${memo.content} (${memo.timestamp})`).join('\n');
-            assistAnswer.textContent = result;
-        } else {
-            assistAnswer.textContent = '暂未找到相关记录，功能开发中...';
-        }
-    }
-    
-    function clearAssistPanel() {
-        assistAsk.value = '';
-        assistAnswer.textContent = '提示：生成合同成功后会自动推进到"合同"。';
-    }
+
 });
 
 
@@ -2207,51 +2255,20 @@ function createExpiringCustomersReminder() {
     const existing = document.getElementById('smart-calculator');
     if (existing) existing.remove();
 
-    // 创建新看板
+    // 创建新看板（统一使用样式类）
     const container = document.createElement('div');
     container.id = 'smart-calculator';
-    
-    // 强制设置样式
-    container.style.position = 'fixed';
-    container.style.top = '20px';
-    container.style.right = '20px';
-    container.style.width = '335px';
-    container.style.height = '120px';
-    container.style.maxHeight = '120px';
-    container.style.backgroundColor = 'white';
-    container.style.borderRadius = '8px';
-    container.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)';
-    container.style.borderLeft = '4px solid #E6C17D';
-    container.style.zIndex = '1000';
-    container.style.overflow = 'hidden';
+    container.className = 'smart-calculator';
 
-    // 标题栏
+    // 标题栏使用统一样式类
     const header = document.createElement('div');
-    Object.assign(header.style, {
-        padding: '8px 15px',
-        backgroundColor: '#F0D6A3',
-        borderRadius: '8px 8px 0 0',
-        fontSize: '16px',
-        fontWeight: '600',
-        color: '#4A4A4A',
-        textAlign: 'center',
-        height: '40px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxSizing: 'border-box'
-    });
+    header.className = 'calculator-header';
     header.textContent = '📅 到期客户提醒';
 
-    // 内容区域
+    // 内容区域使用统一样式类
     const content = document.createElement('div');
-    Object.assign(content.style, {
-        padding: '10px',
-        backgroundColor: 'white',
-        height: '100px',
-        overflowY: 'auto'
-    });
-    content.innerHTML = '<div style="text-align:center;padding:20px;color:#666;">正在加载...</div>';
+    content.className = 'calculator-display';
+    content.innerHTML = '<div class="loading">加载中...</div>';
 
     container.appendChild(header);
     container.appendChild(content);
@@ -2272,10 +2289,15 @@ function initCalendarDisplay() {
         const day = now.getDate();
         const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
         const weekday = weekdays[now.getDay()];
+
+        // 计算本月第几周（以周一为一周开始）
+        const firstOfMonth = new Date(year, month - 1, 1);
+        const firstDayMondayIndex = (firstOfMonth.getDay() + 6) % 7; // 周一=0
+        const weekOfMonth = Math.floor((day + firstDayMondayIndex - 1) / 7) + 1;
         
         const dateElement = document.getElementById('calendarDate');
         if (dateElement) {
-            dateElement.textContent = `${year}年${month.toString().padStart(2, '0')}月${day.toString().padStart(2, '0')}日 ${weekday}`;
+            dateElement.textContent = `${year}年${month.toString().padStart(2, '0')}月${day.toString().padStart(2, '0')}日（第${weekOfMonth}周） ${weekday}`;
         }
         
         // 更新时间
