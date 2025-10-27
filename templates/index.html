@@ -1339,9 +1339,12 @@
                 document.querySelector('[name="tax_number"]').value = customerData.tax_number;
             }
 
-            // 显示客户信息框
-            document.getElementById('customerInfo').style.display = 'block';
-        }
+        // 显示客户信息框
+        document.getElementById('customerInfo').style.display = 'block';
+
+        // 显示下单流程提醒（确保公司名查询路径也有提示）
+        showOrderProcessTip(customerData.integration_mode);
+    }
 
         document.getElementById('contractForm').addEventListener('submit', function (e) {
             e.preventDefault();

@@ -712,6 +712,7 @@ def export_unsigned_customers():
             return jsonify({'error': '数据文件不存在'}), 500
 
         try:
+            ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
@@ -974,6 +975,8 @@ def query_customer():
             return jsonify({'error': '数据文件不存在'}), 500
 
         try:
+            # 确保pandas已延迟导入
+            pd = ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
@@ -1135,6 +1138,7 @@ def _legacy_update_stage(jdy_id, stage):
             return jsonify({'success': False, 'error': 'Excel文件不存在', 'error_type': 'file_not_found'}), 500
         
         # 读取Excel文件
+        ensure_pandas_imported()
         df = pd.read_excel(excel_path)
         logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         
@@ -1883,6 +1887,7 @@ def update_customer_stage(jdy_id, stage):
         if not os.path.exists(excel_path):
             return {'success': False, 'error': 'Excel文件不存在'}
         
+        ensure_pandas_imported()
         df = pd.read_excel(excel_path)
         
         # 检查必要的列是否存在
