@@ -292,8 +292,21 @@ def upload_excel():
         if not file.filename.endswith('.xlsx'):
             return jsonify({'error': '请上传Excel文件(.xlsx)'}), 400
 
-        # 保存文件
-        file.save('六大战区简道云客户.xlsx')
+        # 原子写入保存文件：临时文件 + os.replace
+        target_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        tmp_fd, tmp_path = tempfile.mkstemp(prefix='upload_', suffix='.xlsx', dir=os.path.dirname(target_path))
+        os.close(tmp_fd)
+        try:
+            file.save(tmp_path)
+            os.replace(tmp_path, target_path)
+        except Exception as save_err:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
+            logger.error(f"保存文件失败: {str(save_err)}")
+            return jsonify({'error': f'文件保存失败: {str(save_err)}'}), 500
         
         # 更新导入时间
         last_import_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -411,9 +424,34 @@ def get_monthly_revenue():
 @login_required
 def get_future_expiring_customers():
     try:
-        # 获取筛选参数
+        # 获取筛选参数：支持销售筛选（兼容旧参数）与战区多选筛选
         sales_filter = request.args.get('sales_filter', 'all')
-        logger.info(f"获取未来到期客户，销售筛选: {sales_filter}")
+        # 可选：支持自定义天数范围，默认显示未来第8天到第33天
+        try:
+            min_days = int(request.args.get('min_days', 8))
+        except Exception:
+            min_days = 8
+        try:
+            max_days = int(request.args.get('max_days', 33))
+        except Exception:
+            max_days = 33
+        if max_days < min_days:
+            max_days = min_days
+        # 既支持多次传入 ?zones=A&zones=B，也支持一次传入 CSV ?zones=A,B
+        zones_list = request.args.getlist('zones')
+        if zones_list:
+            # 如果只有一个值且是逗号分隔的CSV，则进行拆分
+            if len(zones_list) == 1 and isinstance(zones_list[0], str) and (',' in zones_list[0]):
+                zones_list = [s.strip() for s in zones_list[0].split(',') if s.strip()]
+            else:
+                # 常规多值参数：统一做去空格处理
+                zones_list = [str(s).strip() for s in zones_list if str(s).strip()]
+        else:
+            zones_csv = request.args.get('zones')
+            if zones_csv:
+                zones_list = [s.strip() for s in str(zones_csv).split(',') if s.strip()]
+        apply_zone_filter = bool(zones_list) and not (len(zones_list) == 1 and str(zones_list[0]).lower() == 'all')
+        logger.info(f"获取未来到期客户（{min_days}-{max_days}天），销售筛选: {sales_filter}，战区筛选: {zones_list if apply_zone_filter else 'all'}")
         # 检查文件是否存在
         excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
         logger.info(f"尝试读取文件: {excel_path}")
@@ -425,43 +463,82 @@ def get_future_expiring_customers():
             ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+            # 列别名兼容：到期时间 -> 到期日期
+            if '到期日期' not in df.columns and '到期时间' in df.columns:
+                try:
+                    df.rename(columns={'到期时间': '到期日期'}, inplace=True)
+                    logger.info("兼容列名：将'到期时间'重命名为'到期日期'")
+                except Exception as alias_err:
+                    logger.warning(f"列名兼容失败: {str(alias_err)}")
+            # 战区列兼容：支持'战区'、'所属战区'或'归属战区'
+            zone_col = None
+            if '战区' in df.columns:
+                zone_col = '战区'
+            elif '所属战区' in df.columns:
+                zone_col = '所属战区'
+            elif '归属战区' in df.columns:
+                zone_col = '归属战区'
         except Exception as e:
             logger.error(f"Excel读取错误: {str(e)}")
             return jsonify({'error': '数据文件读取失败'}), 500
 
-        if '到期日期' not in df.columns or '用户ID' not in df.columns or '账号-企业名称' not in df.columns or '续费责任销售' not in df.columns:
-            logger.error("Excel文件中缺少必要列")
-            return jsonify({'error': '数据格式错误：缺少必要列'}), 500
+        # 检查必要列并返回具体缺失项（销售列不再强制要求）
+        required_columns = ['到期日期', '用户ID', '账号-企业名称']
+        # 如果启用战区筛选，则需要战区列
+        if apply_zone_filter and not zone_col:
+            # 明确提示缺失战区列
+            missing_columns = ['战区/所属战区/归属战区']
+            logger.error(f"Excel文件中缺少必要列: {missing_columns}")
+            return jsonify({'error': f"数据格式错误：缺少必要列 {missing_columns}"}), 500
+        # 常规缺列检查
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f"Excel文件中缺少必要列: {missing_columns}")
+            return jsonify({'error': f'数据格式错误：缺少必要列 {missing_columns}'}), 500
         
-        # 获取当前日期
+        # 获取当前日期并计算窗口：默认未来第8天到第33天
         now = datetime.now()
+        today = now.date()
+        window_start = pd.Timestamp(today) + pd.Timedelta(days=min_days)
+        window_end = pd.Timestamp(today) + pd.Timedelta(days=max_days)
         
-        # 计算23天后和30天后的日期
-        days_23_later = now + pd.Timedelta(days=23)
-        days_30_later = now + pd.Timedelta(days=30)
-        
-        # 筛选出23-30天内将要过期的客户
+        # 筛选出指定天数范围内（min_days-max_days）将要过期的客户
         future_customers = []
-        
+
         for _, row in df.iterrows():
             if pd.notna(row['到期日期']):
                 try:
-                    expiry_date = pd.to_datetime(row['到期日期'])
-                    # 如果过期时间在23天后和30天后之间
-                    if days_23_later <= expiry_date <= days_30_later:
+                    expiry_date = pd.to_datetime(row['到期日期']).normalize()
+                    # 如果过期时间在min_days-max_days窗口内
+                    if window_start <= expiry_date <= window_end:
                         # 使用标准化函数获取销售代表姓名
                         sales_person = get_normalized_sales_person(row)
-                        
-                        # 应用销售代表筛选
-                        if sales_filter != 'all' and sales_filter != sales_person:
-                            continue
+                        # 战区筛选
+                        if apply_zone_filter:
+                            # 如果战区列缺失（未在前面返回错误），则跳过筛选
+                            if zone_col:
+                                zone_value = row.get(zone_col, '')
+                                # 兼容NaN与字符串空白
+                                try:
+                                    is_nan = pd.isna(zone_value)
+                                except Exception:
+                                    is_nan = False
+                                zone_value_str = '' if (zone_value is None or is_nan) else str(zone_value).strip()
+                                if zone_value_str not in zones_list:
+                                    continue
+                        else:
+                            # 兼容旧的销售筛选参数（未启用战区筛选时）
+                            if sales_filter != 'all' and sales_filter != sales_person:
+                                continue
                         
                         customer_info = {
                             'id': str(row.get('用户ID', '')),
                             'expiry_date': expiry_date.strftime('%Y年%m月%d日'),
                             'jdy_account': str(row.get('用户ID', '')),
                             'company_name': str(row.get('账号-企业名称', '')),
-                            'sales_person': sales_person
+                            'sales_person': sales_person,
+                            'zone': str(row.get(zone_col, '')) if zone_col else ''
                         }
                         
                         future_customers.append(customer_info)
@@ -473,7 +550,7 @@ def get_future_expiring_customers():
         # 按过期日期排序
         future_customers.sort(key=lambda x: x['expiry_date'])
         
-        logger.info(f"找到{len(future_customers)}个即将过期的客户（筛选条件：{sales_filter}）")
+        logger.info(f"找到{len(future_customers)}个即将过期的客户（销售筛选：{sales_filter}，战区筛选：{zones_list if apply_zone_filter else 'all'}）")
         return jsonify({
             'future_customers': future_customers
         })
@@ -524,13 +601,92 @@ def get_sales_representatives():
         logger.error(f"获取销售代表列表失败: {str(e)}")
         return jsonify({'error': f'获取销售代表列表失败: {str(e)}'}), 500
 
+@app.route('/get_zones')
+@login_required
+def get_zones():
+    try:
+        # 默认战区列表（按业务常用顺序），排除“简道云大区”
+        default_zones_order = [
+            '上海大区', '东北大区', '北京大区', '华中大区', '华北大区', '华南大区',
+            '浙闵大区', '苏皖大区', '西北大区', '西南大区'
+        ]
+
+        # 优先从Excel收集战区，如果不可用则回退到默认列表
+        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.info(f"尝试读取文件获取战区列表: {excel_path}")
+
+        zones_from_excel = set()
+        if os.path.exists(excel_path):
+            try:
+                ensure_pandas_imported()
+                df = pd.read_excel(excel_path)
+                logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+
+                # 战区列兼容：支持'战区'、'所属战区'或'归属战区'
+                zone_col = None
+                if '战区' in df.columns:
+                    zone_col = '战区'
+                elif '所属战区' in df.columns:
+                    zone_col = '所属战区'
+                elif '归属战区' in df.columns:
+                    zone_col = '归属战区'
+
+                if zone_col:
+                    for _, row in df.iterrows():
+                        zone_val = row.get(zone_col, '')
+                        try:
+                            is_nan = pd.isna(zone_val)
+                        except Exception:
+                            is_nan = False
+                        if zone_val is None or is_nan:
+                            continue
+                        zone_str = str(zone_val).strip()
+                        if zone_str and zone_str != '简道云大区':
+                            zones_from_excel.add(zone_str)
+                else:
+                    logger.warning("Excel文件中缺少战区列 ['战区'、'所属战区'、'归属战区']，将仅使用默认战区列表")
+            except Exception as e:
+                logger.warning(f"Excel读取或解析战区失败，将使用默认战区列表: {str(e)}")
+        else:
+            logger.warning(f"数据文件不存在: {excel_path}，将使用默认战区列表")
+
+        # 合并默认战区与Excel战区，保持默认顺序，其余追加在后
+        merged_zones = []
+        seen = set()
+        for z in default_zones_order:
+            if z not in seen:
+                merged_zones.append(z)
+                seen.add(z)
+        for z in sorted(zones_from_excel):
+            if z not in seen:
+                merged_zones.append(z)
+                seen.add(z)
+
+        logger.info(f"返回{len(merged_zones)}个战区（含默认与Excel提取，已排除简道云大区）")
+        return jsonify({'zones': merged_zones})
+
+    except Exception as e:
+        logger.error(f"获取战区列表失败: {str(e)}")
+        return jsonify({'error': f'获取战区列表失败: {str(e)}'}), 500
+
 @app.route('/get_unsigned_customers')
 @login_required
 def get_unsigned_customers():
-    """获取最近30天内客户数据，支持状态筛选"""
+    """获取未来8-33天内客户数据，支持状态筛选"""
     try:
         # 获取筛选参数
         status_filter = request.args.get('status', 'all')  # all, na, contract, invoice, paid
+        # 可选：支持自定义天数范围，默认未来第8天到第33天
+        try:
+            min_days = int(request.args.get('min_days', 8))
+        except Exception:
+            min_days = 8
+        try:
+            max_days = int(request.args.get('max_days', 33))
+        except Exception:
+            max_days = 33
+        if max_days < min_days:
+            max_days = min_days
         
         # 检查文件是否存在
         excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
@@ -543,11 +699,18 @@ def get_unsigned_customers():
             ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+            # 列别名兼容：部分数据使用“到期时间”，统一重命名为“到期日期”
+            if '到期日期' not in df.columns and '到期时间' in df.columns:
+                try:
+                    df.rename(columns={'到期时间': '到期日期'}, inplace=True)
+                    logger.info("兼容列名：将'到期时间'重命名为'到期日期'")
+                except Exception as alias_err:
+                    logger.warning(f"列名兼容失败: {str(alias_err)}")
         except Exception as e:
             logger.error(f"Excel读取错误: {str(e)}")
             return jsonify({'customers': [], 'error': '数据文件读取失败'}), 500
 
-        # 检查必要的列是否存在
+        # 检查必要的列是否存在（到期日期已在上方做过别名兼容）
         required_columns = ['用户ID', '账号-企业名称', '到期日期', '客户阶段']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -557,17 +720,18 @@ def get_unsigned_customers():
         # 获取当前日期
         now = datetime.now()
         today = now.date()
-        thirty_days_later = today + pd.Timedelta(days=30)
+        eight_days_later = today + pd.Timedelta(days=min_days)
+        thirty_three_days_later = today + pd.Timedelta(days=max_days)
         
         # 筛选出未来30天内到期的客户
         filtered_customers = []
         for _, row in df.iterrows():
-            # 检查到期日期是否在最近30天内
+            # 检查到期日期是否在未来8-33天内
             if pd.notna(row['到期日期']):
                 try:
                     expiry_date = pd.to_datetime(row['到期日期']).date()
-                    # 如果到期日期在未来30天内
-                    if today <= expiry_date <= thirty_days_later:
+                    # 如果到期日期在未来8-33天内
+                    if eight_days_later <= expiry_date <= thirty_three_days_later:
                         # 获取客户阶段
                         customer_stage = row.get('客户阶段', '')
                         stage_normalized = ''
@@ -578,7 +742,8 @@ def get_unsigned_customers():
                         should_include = False
                         if status_filter == 'all':
                             should_include = True
-                        elif status_filter == 'na' and stage_normalized == '':
+                        # NA 兼容：空值或显式字符串 "NA"
+                        elif status_filter == 'na' and (stage_normalized == '' or str(stage_normalized).strip().upper() == 'NA'):
                             should_include = True
                         elif status_filter == 'contract' and '合同' in stage_normalized:
                             should_include = True
@@ -627,13 +792,13 @@ def get_unsigned_customers():
         # 按到期日期排序（最近到期的在前）
         filtered_customers.sort(key=lambda x: x['days_until_expiry'])
         
-        # 获取所有未来30天内的客户（不考虑状态筛选）用于计算各状态的数量
+        # 获取所有未来8-33天内的客户（不考虑状态筛选）用于计算各状态的数量
         all_customers_30days = []
         for _, row in df.iterrows():
             if pd.notna(row['到期日期']):
                 try:
                     expiry_date = pd.to_datetime(row['到期日期']).date()
-                    if today <= expiry_date <= thirty_days_later:
+                    if eight_days_later <= expiry_date <= thirty_three_days_later:
                         customer_stage = row.get('客户阶段', '')
                         stage_normalized = ''
                         if pd.notna(customer_stage) and str(customer_stage).strip() != '' and str(customer_stage).lower() != 'nan':
@@ -645,44 +810,31 @@ def get_unsigned_customers():
                 except Exception:
                     continue
         
-        # 获取所有可用的状态选项
-        all_stages = set()
-        for customer in all_customers_30days:
-            stage = customer['customer_stage']
-            if stage != 'NA':
-                all_stages.add(stage)
-        
-        available_statuses = [
-            {'value': 'all', 'label': '全部状态', 'count': len(all_customers_30days)},
-            {'value': 'na', 'label': 'NA状态', 'count': len([c for c in all_customers_30days if c['customer_stage'] == 'NA'])}
+        # 计算各状态计数（稳定返回所有已知状态，即使为0）
+        count_all = len(all_customers_30days)
+        count_na = len([c for c in all_customers_30days if str(c['customer_stage']).strip().upper() == 'NA'])
+        count_contract = len([c for c in all_customers_30days if '合同' in c['customer_stage']])
+        count_invoice = len([c for c in all_customers_30days if '开票' in c['customer_stage']])
+        count_advance_invoice = len([c for c in all_customers_30days if '提前开' in c['customer_stage']])
+        count_paid = len([c for c in all_customers_30days if ('回款' in c['customer_stage'] or '已付' in c['customer_stage'])])
+        count_upsell = len([c for c in all_customers_30days if '增购' in c['customer_stage']])
+        count_invalid = len([c for c in all_customers_30days if '无效' in c['customer_stage']])
+        count_lost = len([c for c in all_customers_30days if '失联' in c['customer_stage']])
+
+        # 固定顺序返回，避免前端芯片缺失
+        unique_statuses = [
+            {'value': 'all', 'label': '全部状态', 'count': count_all},
+            {'value': 'na', 'label': 'NA状态', 'count': count_na},
+            {'value': 'contract', 'label': '合同状态', 'count': count_contract},
+            {'value': 'invoice', 'label': '开票状态', 'count': count_invoice},
+            {'value': 'advance_invoice', 'label': '提前开状态', 'count': count_advance_invoice},
+            {'value': 'paid', 'label': '回款状态', 'count': count_paid},
+            {'value': 'upsell', 'label': '增购状态', 'count': count_upsell},
+            {'value': 'invalid', 'label': '无效状态', 'count': count_invalid},
+            {'value': 'lost', 'label': '失联状态', 'count': count_lost},
         ]
         
-        # 动态添加其他状态
-        for stage in sorted(all_stages):
-            if '合同' in stage:
-                available_statuses.append({'value': 'contract', 'label': '合同状态', 'count': len([c for c in all_customers_30days if '合同' in c['customer_stage']])})
-            elif '开票' in stage:
-                available_statuses.append({'value': 'invoice', 'label': '开票状态', 'count': len([c for c in all_customers_30days if '开票' in c['customer_stage']])})
-            elif '提前开' in stage:
-                available_statuses.append({'value': 'advance_invoice', 'label': '提前开状态', 'count': len([c for c in all_customers_30days if '提前开' in c['customer_stage']])})
-            elif '回款' in stage or '已付' in stage:
-                available_statuses.append({'value': 'paid', 'label': '回款状态', 'count': len([c for c in all_customers_30days if '回款' in c['customer_stage'] or '已付' in c['customer_stage']])})
-            elif '增购' in stage:
-                available_statuses.append({'value': 'upsell', 'label': '增购状态', 'count': len([c for c in all_customers_30days if '增购' in c['customer_stage']])})
-            elif '无效' in stage:
-                available_statuses.append({'value': 'invalid', 'label': '无效状态', 'count': len([c for c in all_customers_30days if '无效' in c['customer_stage']])})
-            elif '失联' in stage:
-                available_statuses.append({'value': 'lost', 'label': '失联状态', 'count': len([c for c in all_customers_30days if '失联' in c['customer_stage']])})
-        
-        # 去重
-        seen_values = set()
-        unique_statuses = []
-        for status in available_statuses:
-            if status['value'] not in seen_values:
-                seen_values.add(status['value'])
-                unique_statuses.append(status)
-        
-        logger.info(f"找到{len(filtered_customers)}个未来30天内的客户（筛选条件: {status_filter}）")
+        logger.info(f"找到{len(filtered_customers)}个未来{min_days}-{max_days}天内的客户（筛选条件: {status_filter}）")
         return jsonify({
             'customers': filtered_customers,
             'total_count': len(filtered_customers),
@@ -767,10 +919,27 @@ def get_expiring_customers():
         # 获取筛选参数
         sales_filter = request.args.get('sales_filter', 'all')
         test_mode = request.args.get('test_mode', 'false').lower() == 'true'
+        # 战区筛选参数（支持CSV和重复参数两种形式）
+        raw_zones = request.args.getlist('zones')
+        zones_list = []
+        for val in raw_zones:
+            if not val:
+                continue
+            if ',' in val:
+                for z in val.split(','):
+                    z_clean = z.strip()
+                    if z_clean:
+                        zones_list.append(z_clean)
+            else:
+                v = val.strip()
+                if v:
+                    zones_list.append(v)
+        # 去重并保留顺序
+        zones_list = list(dict.fromkeys(zones_list))
         logger.info(f"=== API调用开始 ===")
-        logger.info(f"请求参数 - sales_filter: {sales_filter}, test_mode: {test_mode}")
-        logger.info(f"原始参数 - sales_filter: {request.args.get('sales_filter')}, test_mode: {request.args.get('test_mode')}")
-        logger.info(f"获取到期客户，销售筛选: {sales_filter}, 测试模式: {test_mode}")
+        logger.info(f"请求参数 - sales_filter: {sales_filter}, test_mode: {test_mode}, zones: {zones_list}")
+        logger.info(f"原始参数 - sales_filter: {request.args.get('sales_filter')}, test_mode: {request.args.get('test_mode')}, zones(raw): {raw_zones}")
+        logger.info(f"获取到期客户，销售筛选: {sales_filter}, 战区筛选: {zones_list}, 测试模式: {test_mode}")
         
         # 获取当前日期
         now = datetime.now()
@@ -787,86 +956,43 @@ def get_expiring_customers():
             ensure_pandas_imported()
             df = pd.read_excel(excel_path)
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
+            # 列别名兼容：到期时间 -> 到期日期
+            if '到期日期' not in df.columns and '到期时间' in df.columns:
+                try:
+                    df.rename(columns={'到期时间': '到期日期'}, inplace=True)
+                    logger.info("兼容列名：将'到期时间'重命名为'到期日期'")
+                except Exception as alias_err:
+                    logger.warning(f"列名兼容失败: {str(alias_err)}")
         except Exception as e:
             logger.error(f"Excel读取错误: {str(e)}")
             return jsonify({'expiring_customers': [], 'error': '数据文件读取失败', 'today_date': today.strftime('%Y年%m月%d日')})
 
-        if '到期日期' not in df.columns or '用户ID' not in df.columns or '账号-企业名称' not in df.columns:
-            logger.error("Excel文件中缺少必要列")
-            return jsonify({'expiring_customers': [], 'error': '数据格式错误：缺少必要列', 'today_date': today.strftime('%Y年%m月%d日')})
-        
-        # 定义节假日（可以根据需要扩展）
-        holidays = [
-            # 2024年节假日
-            '2024-01-01', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-15', '2024-02-16', '2024-02-17',
-            '2024-04-04', '2024-04-05', '2024-04-06',
-            '2024-05-01', '2024-05-02', '2024-05-03',
-            '2024-06-10',
-            '2024-09-15', '2024-09-16', '2024-09-17',
-            '2024-10-01', '2024-10-02', '2024-10-03', '2024-10-04', '2024-10-05', '2024-10-06', '2024-10-07',
-            # 2025年节假日
-            '2025-01-01', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03',
-            '2025-04-05', '2025-04-06', '2025-04-07',
-            '2025-05-01', '2025-05-02', '2025-05-03',
-            '2025-06-09',
-            '2025-09-06', '2025-09-07', '2025-09-08',
-            '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07'
-        ]
-        
-        holiday_dates = [datetime.strptime(h, '%Y-%m-%d').date() for h in holidays]
-        
-        # 判断提醒逻辑
-        weekday = today.weekday()  # 0=周一, 1=周二, ..., 6=周日
-        target_dates = []
-        reminder_type = ""
-        
-        # 检查是否是节假日前一天
-        is_before_holiday = False
-        holiday_period = []
-        
-        for holiday in holiday_dates:
-            if holiday == today + pd.Timedelta(days=1):  # 明天是节假日
-                is_before_holiday = True
-                # 找到连续的节假日期间
-                current_date = holiday
-                while current_date in holiday_dates:
-                    holiday_period.append(current_date)
-                    current_date += pd.Timedelta(days=1)
-                break
-        
-        if test_mode:
-            # 测试模式：强制显示明天到期的客户
-            tomorrow = today + pd.Timedelta(days=1)
-            target_dates = [tomorrow]
-            reminder_type = "测试模式 - 明天到期提醒"
-            logger.info("测试模式，强制提醒明天到期的客户")
-        elif is_before_holiday:
-            # 节假日前一天：提醒节假日期间到期的客户
-            target_dates = holiday_period
-            reminder_type = f"节假日期间到期提醒（{holiday_period[0].strftime('%m月%d日')}至{holiday_period[-1].strftime('%m月%d日')}）"
-            logger.info(f"节假日前一天，提醒节假日期间到期的客户: {target_dates}")
-        elif weekday == 4:  # 周五
-            # 周五：提醒周六和周日到期的客户
-            saturday = today + pd.Timedelta(days=1)
-            sunday = today + pd.Timedelta(days=2)
-            target_dates = [saturday, sunday]
-            reminder_type = "周末到期提醒"
-            logger.info("周五，提醒周末到期的客户")
-        elif weekday < 4:  # 周一到周四
-            # 平时：提醒明天到期的客户
-            tomorrow = today + pd.Timedelta(days=1)
-            target_dates = [tomorrow]
-            reminder_type = "明天到期提醒"
-            logger.info("工作日，提醒明天到期的客户")
-        else:  # 周六、周日
-            # 周末不提醒
-            logger.info("今天是周末，不显示到期客户提醒")
+        # 检查必要的列并返回具体缺失项
+        required_columns = ['到期日期', '用户ID', '账号-企业名称']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f"Excel文件中缺少必要列: {missing_columns}")
             return jsonify({
-                'expiring_customers': [], 
-                'message': '周末愉快，暂不显示到期提醒',
-                'today_date': today.strftime('%Y年%m月%d日'),
-                'reminder_type': '周末休息'
+                'expiring_customers': [],
+                'error': f'数据格式错误：缺少必要列 {missing_columns}',
+                'today_date': today.strftime('%Y年%m月%d日')
             })
+        
+        # 战区列识别
+        zone_col = None
+        for candidate in ['战区', '所属战区', '归属战区']:
+            if candidate in df.columns:
+                zone_col = candidate
+                break
+        apply_zone_filter = len(zones_list) > 0 and zone_col is not None
+        if len(zones_list) > 0 and zone_col is None:
+            logger.warning("Excel中未找到战区相关列，忽略战区筛选")
+        
+        # 按需求：显示从今天开始，向后推延7天内到期
+        start_date = today
+        end_date = today + pd.Timedelta(days=7)
+        reminder_type = "未来7天到期提醒"
+        logger.info(f"到期提醒窗口：{start_date} 至 {end_date}，战区列: {zone_col}")
         
         # 筛选出目标日期到期的客户
         expiring_customers = []
@@ -877,7 +1003,7 @@ def get_expiring_customers():
             if pd.notna(row['到期日期']):
                 try:
                     expiry_date = pd.to_datetime(row['到期日期']).date()
-                    if expiry_date in target_dates:
+                    if start_date <= expiry_date <= end_date:
                         total_expiring += 1
                         # 使用标准化函数获取销售代表姓名
                         sales_person = get_normalized_sales_person(row)
@@ -885,8 +1011,23 @@ def get_expiring_customers():
                         # 应用销售代表筛选
                         if sales_filter != 'all' and sales_filter != sales_person:
                             filtered_out += 1
-                            logger.info(f"筛选掉客户: {row.get('账号-企业名称', '')} | 销售: {sales_person} | 筛选条件: {sales_filter}")
                             continue
+                        
+                        # 读取战区用于展示/筛选
+                        zone_val = ''
+                        if zone_col is not None:
+                            raw_zone_val = row.get(zone_col, None)
+                            try:
+                                is_nan_zone = pd.isna(raw_zone_val)
+                            except Exception:
+                                is_nan_zone = False
+                            zone_val = '' if (raw_zone_val is None or is_nan_zone) else str(raw_zone_val).strip()
+                        
+                        # 应用战区筛选（如有）
+                        if apply_zone_filter:
+                            if zone_val == '' or zone_val not in zones_list:
+                                filtered_out += 1
+                                continue
                         
                         # 计算距离到期的天数
                         days_until_expiry = (expiry_date - today).days
@@ -896,14 +1037,26 @@ def get_expiring_customers():
                             date_label = "明天到期"
                         else:
                             date_label = f"{days_until_expiry}天后到期"
-                        
+                        # 追加客户阶段到日期标签（如有），格式示例：3天后到期-回款 (2025年10月31日)
+                        stage_val = row.get('客户阶段', None)
+                        try:
+                            stage_is_nan = pd.isna(stage_val)
+                        except Exception:
+                            stage_is_nan = False
+                        stage_label = '' if (stage_val is None or stage_is_nan) else str(stage_val).strip()
+                        if stage_label:
+                            expiry_text = f"{date_label}-{stage_label} ({expiry_date.strftime('%Y年%m月%d日')})"
+                        else:
+                            expiry_text = f"{date_label} ({expiry_date.strftime('%Y年%m月%d日')})"
+
                         expiring_customers.append({
-                            'expiry_date': f"{date_label} ({expiry_date.strftime('%Y年%m月%d日')})",
+                            'expiry_date': expiry_text,
                             'jdy_account': str(row.get('用户ID', '')),
                             'company_name': str(row.get('账号-企业名称', '')),
                             'sales_person': sales_person,
                             'customer_classification': str(row.get('客户分类', '')),
-                            'days_until_expiry': days_until_expiry
+                            'days_until_expiry': days_until_expiry,
+                            'zone': zone_val
                         })
                 except Exception as e:
                     logger.warning(f"日期转换错误: {str(e)}")
@@ -916,29 +1069,27 @@ def get_expiring_customers():
         logger.info(f"筛选统计 - 总到期客户: {total_expiring}, 筛选掉: {filtered_out}, 最终结果: {len(expiring_customers)}, 筛选条件: {sales_filter}")
         
         if len(expiring_customers) == 0:
-            # 根据提醒类型显示更具体的信息
-            if reminder_type == "明天到期提醒":
-                message = "😊 明天没有客户到期"
-            elif reminder_type == "周末到期提醒":
-                message = "😊 这个周末没有客户到期"
-            elif "节假日期间到期提醒" in reminder_type:
-                message = f"😊 {reminder_type.split('（')[1].split('）')[0]}期间没有客户到期"
+            # 未来7天窗口的提示信息（根据是否有战区筛选）
+            if apply_zone_filter and len(zones_list) > 0:
+                zones_str = '，'.join(zones_list)
+                message = f"😊 {zones_str}在未来7天内没有客户到期"
             else:
-                message = "😊 近期没有客户到期"
-            
+                message = "😊 未来7天内没有客户到期"
             logger.info(message)
             return jsonify({
                 'expiring_customers': [], 
                 'message': message,
                 'today_date': today.strftime('%Y年%m月%d日'),
-                'reminder_type': reminder_type
+                'reminder_type': reminder_type,
+                'selected_zones': zones_list
             })
         else:
             logger.info(f"找到{len(expiring_customers)}个即将过期的客户")
             return jsonify({
                 'expiring_customers': expiring_customers,
                 'today_date': today.strftime('%Y年%m月%d日'),
-                'reminder_type': reminder_type
+                'reminder_type': reminder_type,
+                'selected_zones': zones_list
             })
 
     except Exception as e:

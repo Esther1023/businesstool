@@ -234,6 +234,262 @@ function showSalesFilterModal(type) {
         });
 }
 
+// 显示战区多选筛选模态框（用于未来30天客户看板）
+function showZonesFilterModal() {
+    // 移除现有模态框
+    const existingModal = document.getElementById('zonesFilterModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // 创建模态框背景
+    const modalBackdrop = document.createElement('div');
+    modalBackdrop.id = 'zonesFilterModal';
+    modalBackdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    `;
+
+    // 创建模态框内容
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: white;
+        border-radius: 8px;
+        padding: 16px;
+        width: 340px;
+        max-height: 420px;
+        overflow-y: auto;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    `;
+
+    // 模态框标题
+    const title = document.createElement('h3');
+    title.textContent = '选择战区（可多选）';
+    title.style.cssText = `
+        margin: 0 0 10px 0;
+        color: #333;
+        text-align: center;
+        font-size: 16px;
+    `;
+
+    // 加载中提示
+    const loading = document.createElement('div');
+    loading.textContent = '正在加载战区列表...';
+    loading.style.cssText = `
+        text-align: center;
+        color: #666;
+        padding: 20px;
+    `;
+
+    modalContent.appendChild(title);
+    modalContent.appendChild(loading);
+    modalBackdrop.appendChild(modalContent);
+    document.body.appendChild(modalBackdrop);
+
+    // 点击背景关闭模态框
+    modalBackdrop.addEventListener('click', function(e) {
+        if (e.target === modalBackdrop) {
+            modalBackdrop.remove();
+        }
+    });
+
+    // 获取战区列表
+    fetch('/get_zones')
+        .then(response => response.json())
+        .then(data => {
+            loading.remove();
+
+            const zones = Array.isArray(data) ? data : (data.zones || []);
+            if (!zones || zones.length === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.textContent = '未获取到战区列表';
+                emptyDiv.style.cssText = 'text-align:center;color:#e74c3c;padding:10px;';
+                modalContent.appendChild(emptyDiv);
+                return;
+            }
+
+            // 选项容器
+            const listContainer = document.createElement('div');
+            listContainer.style.cssText = 'margin: 8px 0;';
+
+            const current = Array.isArray(window._selectedZones) ? window._selectedZones : [];
+
+            zones.forEach(zone => {
+                if (!zone || !String(zone).trim()) return;
+                const label = document.createElement('label');
+                label.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px;border:1px solid #eee;border-radius:6px;margin-bottom:6px;background:#fff;';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = zone;
+                checkbox.checked = current.includes(zone);
+                const span = document.createElement('span');
+                span.textContent = zone;
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                listContainer.appendChild(label);
+            });
+
+            modalContent.appendChild(listContainer);
+
+            // 操作按钮区域
+            const actions = document.createElement('div');
+            actions.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+
+            const btnSelectAll = document.createElement('button');
+            btnSelectAll.textContent = '全选';
+            btnSelectAll.style.cssText = 'flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;background:#f8f9fa;cursor:pointer;';
+            btnSelectAll.addEventListener('click', function() {
+                modalContent.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+            });
+
+            const btnClear = document.createElement('button');
+            btnClear.textContent = '清除';
+            btnClear.style.cssText = 'flex:1;padding:8px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;';
+            btnClear.addEventListener('click', function() {
+                modalContent.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            });
+
+            const btnApply = document.createElement('button');
+            btnApply.textContent = '应用筛选';
+            btnApply.style.cssText = 'flex:1;padding:8px;border:1px solid #007bff;border-radius:6px;background:#007bff;color:#fff;cursor:pointer;';
+            btnApply.addEventListener('click', function() {
+                const selected = Array.from(modalContent.querySelectorAll('input[type="checkbox"]'))
+                    .filter(cb => cb.checked)
+                    .map(cb => cb.value);
+                applyZoneFilter(selected);
+                modalBackdrop.remove();
+            });
+
+            const btnCancel = document.createElement('button');
+            btnCancel.textContent = '取消';
+            btnCancel.style.cssText = 'flex:1;padding:8px;border:1px solid #6c757d;border-radius:6px;background:#6c757d;color:#fff;cursor:pointer;';
+            btnCancel.addEventListener('click', function() {
+                modalBackdrop.remove();
+            });
+
+            actions.appendChild(btnSelectAll);
+            actions.appendChild(btnClear);
+            actions.appendChild(btnApply);
+            actions.appendChild(btnCancel);
+            modalContent.appendChild(actions);
+        })
+        .catch(error => {
+            loading.remove();
+            const errorDiv = document.createElement('div');
+            errorDiv.textContent = '网络错误，请稍后重试';
+            errorDiv.style.color = '#e74c3c';
+            errorDiv.style.textAlign = 'center';
+            modalContent.appendChild(errorDiv);
+        });
+}
+
+// 应用战区筛选
+function applyZoneFilter(zones) {
+    window._selectedZones = Array.isArray(zones) ? zones : [];
+    fetchFutureCustomersWithZones(window._selectedZones);
+}
+
+// 获取筛选后的未来30天客户（按战区，多选）
+function fetchFutureCustomersWithZones(selectedZones = []) {
+    let url = '/get_future_expiring_customers';
+    if (Array.isArray(selectedZones) && selectedZones.length > 0) {
+        const zonesParam = encodeURIComponent(selectedZones.join(','));
+        url += `?zones=${zonesParam}`;
+    }
+
+    const fallback = { future_customers: [], _static_preview: true };
+
+    // 显示加载状态
+    const unsignedList = document.getElementById('unsignedCustomersList');
+    if (unsignedList) {
+        unsignedList.innerHTML = '<div class="loading">加载中...</div>';
+    }
+
+    safeJsonFetch(url, { credentials: 'same-origin' }, fallback)
+        .then(data => {
+            const errorMsg = data && data.error ? data.error : (data && data._static_preview ? '静态预览：后端未连接' : '');
+            if (errorMsg) {
+                logApiError(url, errorMsg);
+            }
+            const customers = (data && Array.isArray(data.future_customers)) ? data.future_customers : [];
+            updateFutureCustomersDisplayWithZones(customers, selectedZones);
+        });
+}
+
+// 更新未来30天客户看板显示（按战区）
+// 辅助：格式化到期日期标签（为未来30天看板补充“多少天后到期”）
+function formatExpiryLabel(dateStr) {
+    try {
+        if (!dateStr) return '';
+        // 如果后端已经提供了“多少天后到期”标签，则直接返回
+        if (dateStr.includes('天后到期') || dateStr.includes('今天到期') || dateStr.includes('明天到期')) {
+            return dateStr;
+        }
+        const m = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+        if (!m) return dateStr;
+        const year = parseInt(m[1], 10);
+        const month = parseInt(m[2], 10) - 1;
+        const day = parseInt(m[3], 10);
+        const d = new Date(year, month, day);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        d.setHours(0, 0, 0, 0);
+        const diffMs = d - today;
+        const days = Math.round(diffMs / 86400000);
+        let label = '';
+        if (days === 0) label = '今天到期';
+        else if (days === 1) label = '明天到期';
+        else label = `${days}天后到期`;
+        return `${label} (${dateStr})`;
+    } catch (e) {
+        return dateStr;
+    }
+}
+function updateFutureCustomersDisplayWithZones(customers, selectedZones = []) {
+    const unsignedList = document.getElementById('unsignedCustomersList');
+    if (!unsignedList) return;
+
+    const hasSelection = Array.isArray(selectedZones) && selectedZones.length > 0;
+    const filterLabel = hasSelection ? selectedZones.join('，') : '全部战区';
+
+    if (customers.length === 0) {
+        unsignedList.innerHTML = `<div style="text-align: center; color: var(--text-color); padding: 10px;">😊 ${filterLabel}内没有未来8-33天内到期的客户</div>`;
+        return;
+    }
+
+    let html = '';
+
+    // 添加筛选提示
+    html += `<div style="background: #e3f2fd; padding: 8px; margin-bottom: 10px; border-radius: 4px; text-align: center; font-size: 12px; color: #1976d2;">
+        当前筛选战区：${filterLabel}（${customers.length}个客户）
+    </div>`;
+
+    customers.forEach(customer => {
+        const expiryLabel = formatExpiryLabel(customer.expiry_date);
+        html += `
+            <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
+                <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${expiryLabel}</div>
+                <div style="font-size: 11px; color: #333; line-height: 1.3;">
+                    <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
+                    <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
+                    ${customer.zone ? `<div style=\"margin-bottom: 2px;\"><strong>战区:</strong> ${customer.zone}</div>` : ''}
+                    <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person || ''}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    unsignedList.innerHTML = html;
+}
+
 // 应用销售代表筛选
 function applySalesFilter(salesName, type) {
     if (type === 'expiring') {
@@ -310,7 +566,7 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
     
     if (customers.length === 0) {
         const filterLabel = salesFilter === 'all' ? '全部' : salesFilter;
-        unsignedList.innerHTML = `<div style="text-align: center; color: var(--text-color); padding: 10px;">😊 ${filterLabel}负责的客户中没有未来30天内到期的客户</div>`;
+        unsignedList.innerHTML = `<div style="text-align: center; color: var(--text-color); padding: 10px;">😊 ${filterLabel}负责的客户中没有未来8-33天内到期的客户</div>`;
         return;
     }
     
@@ -324,12 +580,14 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
     }
     
     customers.forEach(customer => {
+        const expiryLabel = formatExpiryLabel(customer.expiry_date);
         html += `
             <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
-                <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${customer.expiry_date}</div>
+                <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${expiryLabel}</div>
                 <div style="font-size: 11px; color: #333; line-height: 1.3;">
                     <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
                     <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
+                    ${customer.zone ? `<div style=\"margin-bottom: 2px;\"><strong>战区:</strong> ${customer.zone}</div>` : ''}
                     <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
                 </div>
             </div>
@@ -427,11 +685,12 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // 显示即将到期客户提醒看板（替代计算器）
-function showExpiringCustomersAlert(customers, reminderType, todayDate, message) {
+function showExpiringCustomersAlert(customers, reminderType, todayDate, message, selectedZones = []) {
     customers = customers || [];
     reminderType = reminderType || '';
     todayDate = todayDate || '';
     message = message || '';
+    selectedZones = Array.isArray(selectedZones) ? selectedZones : [];
     
     // 检查是否已存在提醒看板，如果存在则移除
     const existingAlert = document.getElementById('smart-calculator');
@@ -453,7 +712,7 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     
     // 添加筛选按钮（使用高对比度样式类）
     const filterBtn = document.createElement('button');
-    filterBtn.textContent = '🔍 筛选';
+    filterBtn.textContent = '🔍 筛选（战区）';
     filterBtn.className = 'calculator-filter-btn';
     
     const closeBtn = document.createElement('button');
@@ -490,6 +749,16 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
 
     // 移除日期和类型信息显示
 
+    // 显示当前筛选战区（如有）
+    if (selectedZones.length > 0) {
+        const zoneInfo = document.createElement('div');
+        zoneInfo.style.marginBottom = '8px';
+        zoneInfo.style.color = '#1f2a37';
+        zoneInfo.style.fontSize = '13px';
+        zoneInfo.textContent = '当前筛选战区：' + selectedZones.join('，');
+        alertContent.appendChild(zoneInfo);
+    }
+
     if (customers.length > 0) {
         // 显示到期客户列表
         const customersList = document.createElement('div');
@@ -506,24 +775,30 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
             dateDiv.style.marginBottom = '3px';
             dateDiv.textContent = customer.expiry_date || '';
             
+            const companyDiv = document.createElement('div');
+            companyDiv.style.color = '#333';
+            companyDiv.style.marginBottom = '2px';
+            companyDiv.textContent = '公司：' + (customer.company_name || '');
+
             const accountDiv = document.createElement('div');
             accountDiv.style.color = '#666';
             accountDiv.style.marginBottom = '2px';
             accountDiv.textContent = '账号：' + (customer.jdy_account || '');
             
-            const companyDiv = document.createElement('div');
-            companyDiv.style.color = '#333';
-            companyDiv.style.marginBottom = '2px';
-            companyDiv.textContent = customer.company_name || '';
-            
+            const zoneDiv = document.createElement('div');
+            zoneDiv.style.color = '#333';
+            zoneDiv.style.fontSize = '12px';
+            zoneDiv.textContent = '战区：' + (customer.zone || '');
+
             const salesDiv = document.createElement('div');
             salesDiv.style.color = '#333';
             salesDiv.style.fontSize = '12px';
             salesDiv.textContent = '销售：' + (customer.sales_person || '');
             
             customerItem.appendChild(dateDiv);
-            customerItem.appendChild(accountDiv);
             customerItem.appendChild(companyDiv);
+            customerItem.appendChild(accountDiv);
+            customerItem.appendChild(zoneDiv);
             customerItem.appendChild(salesDiv);
             
             customersList.appendChild(customerItem);
@@ -554,8 +829,156 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message)
     
     // 添加筛选按钮事件
     filterBtn.addEventListener('click', function() {
-        showSalesFilterModal('expiring');
+        showExpiringZonesFilterModal();
     });
+}
+
+// 到期提醒：战区筛选弹窗
+function showExpiringZonesFilterModal() {
+    // 创建遮罩层
+    const modalOverlay = document.createElement('div');
+    modalOverlay.className = 'modal-overlay';
+    modalOverlay.style.position = 'fixed';
+    modalOverlay.style.top = '0';
+    modalOverlay.style.left = '0';
+    modalOverlay.style.width = '100%';
+    modalOverlay.style.height = '100%';
+    modalOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+    modalOverlay.style.display = 'flex';
+    modalOverlay.style.alignItems = 'center';
+    modalOverlay.style.justifyContent = 'center';
+
+    // 创建弹窗容器
+    const modalContainer = document.createElement('div');
+    modalContainer.className = 'modal-container';
+    modalContainer.style.backgroundColor = '#fff';
+    modalContainer.style.borderRadius = '8px';
+    modalContainer.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.1)';
+    modalContainer.style.maxWidth = '520px';
+    modalContainer.style.width = '90%';
+    modalContainer.style.padding = '16px';
+    modalContainer.style.color = 'var(--text-color)';
+
+    // 标题
+    const modalTitle = document.createElement('h3');
+    modalTitle.textContent = '选择战区（到期提醒）';
+    modalTitle.style.marginTop = '0';
+    modalTitle.style.marginBottom = '12px';
+    modalTitle.style.fontSize = '16px';
+    modalTitle.style.color = '#1f2a37';
+    modalContainer.appendChild(modalTitle);
+
+    // 描述
+    const modalDesc = document.createElement('p');
+    modalDesc.textContent = '可多选战区，系统将显示今天起未来7天内到期的客户。';
+    modalDesc.style.margin = '0 0 12px 0';
+    modalDesc.style.fontSize = '13px';
+    modalDesc.style.color = '#4b5563';
+    modalContainer.appendChild(modalDesc);
+
+    // 复选框容器
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.style.display = 'grid';
+    checkboxContainer.style.gridTemplateColumns = 'repeat(2, 1fr)';
+    checkboxContainer.style.gap = '8px';
+    checkboxContainer.style.maxHeight = '240px';
+    checkboxContainer.style.overflowY = 'auto';
+    modalContainer.appendChild(checkboxContainer);
+
+    // 底部按钮
+    const modalActions = document.createElement('div');
+    modalActions.style.display = 'flex';
+    modalActions.style.justifyContent = 'flex-end';
+    modalActions.style.gap = '8px';
+    modalActions.style.marginTop = '12px';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    cancelBtn.className = 'btn';
+    cancelBtn.style.backgroundColor = '#e5e7eb';
+    cancelBtn.style.color = '#111827';
+    cancelBtn.style.border = 'none';
+    cancelBtn.style.padding = '8px 12px';
+    cancelBtn.style.borderRadius = '6px';
+    cancelBtn.style.cursor = 'pointer';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = '确定';
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.style.padding = '8px 12px';
+    confirmBtn.style.borderRadius = '6px';
+    confirmBtn.style.cursor = 'pointer';
+
+    modalActions.appendChild(cancelBtn);
+    modalActions.appendChild(confirmBtn);
+    modalContainer.appendChild(modalActions);
+
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+
+    // 加载战区列表
+    safeJsonFetch('/get_zones')
+        .then(function(data) {
+            const zones = data.zones || [];
+            zones.forEach(function(zone) {
+                const label = document.createElement('label');
+                label.style.display = 'flex';
+                label.style.alignItems = 'center';
+                label.style.gap = '8px';
+                label.style.padding = '6px 8px';
+                label.style.border = '1px solid #e5e7eb';
+                label.style.borderRadius = '6px';
+                label.style.cursor = 'pointer';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = zone;
+
+                const span = document.createElement('span');
+                span.textContent = zone;
+                span.style.color = '#1f2a37';
+
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                checkboxContainer.appendChild(label);
+            });
+        })
+        .catch(function(error){
+            console.error('获取战区列表失败:', error);
+            const errDiv = document.createElement('div');
+            errDiv.textContent = '获取战区列表失败';
+            errDiv.style.color = '#ef4444';
+            checkboxContainer.appendChild(errDiv);
+        });
+
+    // 事件绑定
+    cancelBtn.addEventListener('click', function(){
+        modalOverlay.remove();
+    });
+    confirmBtn.addEventListener('click', function(){
+        const selectedZones = [];
+        checkboxContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb){
+            selectedZones.push(cb.value);
+        });
+        modalOverlay.remove();
+        fetchExpiringCustomersWithZones(selectedZones);
+    });
+}
+
+// 到期提醒：按战区获取数据
+function fetchExpiringCustomersWithZones(selectedZones = []) {
+    const zonesParam = selectedZones && selectedZones.length > 0 ? encodeURIComponent(selectedZones.join(',')) : '';
+    const url = zonesParam ? `/get_expiring_customers?zones=${zonesParam}` : '/get_expiring_customers';
+    safeJsonFetch(url)
+        .then(function(data) {
+            const customers = data.expiring_customers || [];
+            const message = data.message || '';
+            showExpiringCustomersAlert(customers, data.reminder_type, data.today_date, message, selectedZones);
+        })
+        .catch(function(error) {
+            console.error('获取到期客户失败（战区筛选）:', error);
+            showExpiringCustomersAlert([], '', '', '获取数据失败，请稍后重试');
+        });
 }
 
 // 创建备忘录白板（替代原来的25-30天到期客户看板）
@@ -1642,14 +2065,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 未签订合同客户功能
     document.getElementById('btnRefreshUnsigned').addEventListener('click', function() {
-        fetchFutureCustomersWithFilter('all');
+        const zones = (window._selectedZones && window._selectedZones.length > 0) ? window._selectedZones : [];
+        fetchFutureCustomersWithZones(zones);
     });
     
     // 未来30天客户筛选功能
     const btnFilterUnsigned = document.getElementById('btnFilterUnsigned');
     if (btnFilterUnsigned) {
         btnFilterUnsigned.addEventListener('click', function() {
-            showSalesFilterModal('future');
+            showZonesFilterModal();
         });
     }
     
@@ -1667,6 +2091,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 初始化时加载未签订合同客户 - 默认显示NA状态
     fetchUnsignedCustomers('na');
+    
+    // 页面初次加载主动获取未来30天客户（仅在已选择战区时触发）
+    // 避免与状态筛选看板的渲染冲突
+    const initialZones = (window._selectedZones && window._selectedZones.length > 0) ? window._selectedZones : [];
+    // 初始化时无论是否选择战区，都拉取未来看板数据（空数组表示全部战区）
+    fetchFutureCustomersWithZones(initialZones);
     
     // 初始化监控状态
     initializeMonitorStatus();
@@ -1736,6 +2166,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.conflicts_resolved > 0) {
                     assistAnswer.textContent += ` [解决了${data.conflicts_resolved}个冲突]`;
                 }
+
+                // 状态修改成功后，刷新未来30天客户看板（保持当前筛选）
+                try {
+                    const activeBtn = document.querySelector('#status-filter-container .filter-btn.active');
+                    const currentFilter = activeBtn ? activeBtn.getAttribute('data-filter') : 'na';
+                    fetchUnsignedCustomers(currentFilter);
+                } catch (e) {
+                    // 回退为默认NA筛选
+                    fetchUnsignedCustomers('na');
+                }
+
+                // 同步刷新战区视图（空数组表示全部战区）
+                const zones = Array.isArray(window._selectedZones) ? window._selectedZones : [];
+                fetchFutureCustomersWithZones(zones);
             } else {
                 // 处理不同类型的错误
                 handleStageUpdateError(data, stage, jdyId);
@@ -1874,7 +2318,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!data.customers || data.customers.length === 0) {
             const filterLabel = getFilterLabel(statusFilter);
-            unsignedList.innerHTML = `<div style="text-align: center; color: #666; padding: 10px;">😊 最近30天内没有符合"${filterLabel}"条件的客户</div>`;
+            unsignedList.innerHTML = `<div style="text-align: center; color: #666; padding: 10px;">😊 未来8-33天内没有符合"${filterLabel}"条件的客户</div>`;
             return;
         }
         
@@ -1887,7 +2331,8 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>`;
         
         data.customers.forEach(customer => {
-            const stageClass = getStageClass(customer.customer_stage);
+            const stageText = (customer.customer_stage && customer.customer_stage.trim()) ? customer.customer_stage : 'NA';
+            const stageClass = getStageClass(stageText);
             html += `
                 <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
                     <div style="font-size: 12px; color: #e74c3c; font-weight: bold; margin-bottom: 4px;">${customer.expiry_date}</div>
@@ -1895,7 +2340,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
                         <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
                         <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
-                        <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${customer.customer_stage}</span></div>
+                        <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${stageText}</span></div>
                         ${customer.integration_mode ? `<div style="margin-bottom: 2px;"><strong>集成模式:</strong> ${getIntegrationModeTip(customer.integration_mode)}</div>` : ''}
                     </div>
                 </div>
