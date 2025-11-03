@@ -1630,8 +1630,8 @@ def generate_quote():
 
     except Exception as e:
         logger.error(f"生成报价单时发生错误: {str(e)}")
-        return f'生成报价单时发生错误: {str(e)}', 500
-
+         return jsonify({'success': False, 'error': f'生成报价单时发生错误: {str(e)}'}), 500
+        
     finally:
         # 清理临时文件
         try:
