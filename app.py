@@ -1056,7 +1056,8 @@ def get_expiring_customers():
                             'sales_person': sales_person,
                             'customer_classification': str(row.get('客户分类', '')),
                             'days_until_expiry': days_until_expiry,
-                            'zone': zone_val
+                            'zone': zone_val,
+                            'customer_stage': stage_label if stage_label else 'NA'
                         })
                 except Exception as e:
                     logger.warning(f"日期转换错误: {str(e)}")
@@ -1591,23 +1592,33 @@ def generate_quote():
         form_data = request.form.to_dict()
         logger.info(f"接收到的表单数据: {form_data}")
         
-        # 验证必填字段
-        required_fields = ['company_name', 'tax_number', 'jdy_account', 'total_amount', 'user_count']
-        for field in required_fields:
-            if not form_data.get(field):
+        # 验证必填字段（结构化错误返回）
+        required_map = {
+            'company_name': '公司名称',
+            'tax_number': '税号',
+            'jdy_account': '简道云账号',
+            'total_amount': '服务费用金额',
+            'user_count': '使用人数'
+        }
+        errors = {}
+        for field, label in required_map.items():
+            value = (form_data.get(field) or '').strip()
+            if not value:
                 logger.error(f"缺少必填字段: {field}")
-                return f'请填写{field}', 400
+                errors[field] = f"{label}为必填项"
+        if errors:
+            return jsonify({'success': False, 'error': '必填字段缺失', 'errors': errors}), 400
         
         # 检查模板处理器是否可用
         if not TEMPLATE_HANDLER_AVAILABLE:
             logger.error("模板处理器不可用")
-            return '模板处理器不可用，请检查依赖包是否正确安装', 500
+            return jsonify({'success': False, 'error': '模板处理器不可用，请检查依赖包是否正确安装'}), 500
         
         # 使用固定的报价单模板
-        quote_template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates', 'docx_templates', '【2025年续费】 报价单-带变量.doc')
+        quote_template_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates', 'docx_templates', '【2025年续费】 报价单-带变量.docx')
         if not os.path.exists(quote_template_path):
             logger.error(f"报价单模板文件不存在: {quote_template_path}")
-            return '报价单模板文件不存在', 500
+            return jsonify({'success': False, 'error': '报价单模板文件不存在'}), 500
         
         logger.info(f"使用报价单模板: {quote_template_path}")
         
@@ -1630,8 +1641,7 @@ def generate_quote():
 
     except Exception as e:
         logger.error(f"生成报价单时发生错误: {str(e)}")
-         return jsonify({'success': False, 'error': f'生成报价单时发生错误: {str(e)}'}), 500
-        
+        return jsonify({'success': False, 'error': f'生成报价单时发生错误: {str(e)}'}), 500
     finally:
         # 清理临时文件
         try:

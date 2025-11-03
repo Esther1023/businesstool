@@ -685,6 +685,26 @@ textarea.form-control {
     top: -2px;
 }
 
+/* 显式的必填星号样式，兼容不支持 :has 的环境 */
+.required-star {
+    color: var(--error-color);
+    margin-left: 4px;
+    font-weight: 600;
+}
+
+/* 前端校验：缺失必填项的边框高亮 */
+.input-error {
+    border-color: var(--error-color) !important;
+    box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.15) !important;
+}
+
+/* 前端校验：字段下方错误提示样式 */
+.error-text {
+    color: var(--error-color);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
 .form-control:disabled,
 .form-control[readonly] {
     background-color: var(--background-color);

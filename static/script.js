@@ -589,6 +589,7 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
                     <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
                     ${customer.zone ? `<div style=\"margin-bottom: 2px;\"><strong>战区:</strong> ${customer.zone}</div>` : ''}
                     <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
+                    ${customer.customer_stage && customer.customer_stage !== 'NA' ? `<div style=\"margin-bottom: 2px;\"><strong>状态:</strong> ${customer.customer_stage}</div>` : ''}
                 </div>
             </div>
         `;
@@ -2825,6 +2826,48 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(initCalendarDisplay, 500);
 });
 
+// -------- 报价单必填校验与错误显示工具函数 --------
+function setFieldError(fieldName, message) {
+    const input = document.getElementById(fieldName) || document.querySelector(`[name="${fieldName}"]`);
+    if (input) {
+        input.classList.add('input-error');
+    }
+    const errEl = document.getElementById(`error_${fieldName}`) || document.getElementById(`${fieldName}-error`);
+    if (errEl) {
+        errEl.textContent = message || '该字段为必填项';
+        errEl.style.display = 'block';
+    }
+}
+
+function clearFieldError(fieldName) {
+    const input = document.getElementById(fieldName) || document.querySelector(`[name="${fieldName}"]`);
+    if (input) {
+        input.classList.remove('input-error');
+    }
+    const errEl = document.getElementById(`error_${fieldName}`) || document.getElementById(`${fieldName}-error`);
+    if (errEl) {
+        errEl.textContent = '';
+        errEl.style.display = 'none';
+    }
+}
+
+function clearAllFieldErrors(fields) {
+    (fields || []).forEach(f => clearFieldError(f));
+}
+
+// 初始化监听：输入变更时清除错误
+document.addEventListener('DOMContentLoaded', function() {
+    const fields = ['company_name', 'tax_number', 'jdy_account', 'total_amount', 'user_count'];
+    fields.forEach(name => {
+        const el = document.getElementById(name) || document.querySelector(`[name="${name}"]`);
+        if (el) {
+            ['input', 'change', 'blur'].forEach(evt => {
+                el.addEventListener(evt, () => clearFieldError(name));
+            });
+        }
+    });
+});
+
 // 生成报价单功能
 function generateQuote() {
     // 获取表单数据
@@ -2832,15 +2875,34 @@ function generateQuote() {
     
     // 验证必填字段
     const requiredFields = ['company_name', 'tax_number', 'jdy_account', 'total_amount', 'user_count'];
-    for (let field of requiredFields) {
-        if (!formData.get(field)) {
-            alert(`请填写${getFieldLabel(field)}`);
-            return;
+    clearAllFieldErrors(requiredFields);
+    const labels = {
+        'company_name': '公司名称',
+        'tax_number': '税号',
+        'jdy_account': '简道云账号',
+        'total_amount': '服务费用金额',
+        'user_count': '使用人数'
+    };
+    const missing = [];
+    requiredFields.forEach(field => {
+        const val = (formData.get(field) || '').toString().trim();
+        if (!val) {
+            missing.push(field);
+            setFieldError(field, `请填写${labels[field]}`);
         }
+    });
+    if (missing.length) {
+        const first = missing[0];
+        const el = document.getElementById(first) || document.querySelector(`[name="${first}"]`);
+        if (el && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.focus();
+        }
+        return; // 阻止提交
     }
     
     // 显示加载状态
-    const button = event.target;
+    const button = event && event.target ? event.target : document.querySelector('.btn-quote');
     const originalText = button.textContent;
     button.textContent = '生成中...';
     button.disabled = true;
@@ -2851,6 +2913,19 @@ function generateQuote() {
         body: formData
     })
     .then(response => {
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            // 结构化错误返回
+            return response.json().then(data => {
+                if (data && data.errors) {
+                    Object.keys(data.errors).forEach(field => {
+                        setFieldError(field, data.errors[field]);
+                    });
+                }
+                const msg = (data && (data.error || data.message)) || '生成报价单失败';
+                throw new Error(msg);
+            });
+        }
         if (!response.ok) {
             throw new Error('生成报价单失败');
         }
@@ -2872,7 +2947,10 @@ function generateQuote() {
     })
     .catch(error => {
         console.error('生成报价单错误:', error);
-        alert('生成报价单失败，请检查填写的信息');
+        // 保留一次提示，但以结构化错误为主
+        if (!String(error.message || '').includes('请填写')) {
+            alert(error.message || '生成报价单失败，请检查填写的信息');
+        }
     })
     .finally(() => {
         // 恢复按钮状态
