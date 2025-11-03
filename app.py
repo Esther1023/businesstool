@@ -233,7 +233,7 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        if (username == 'Esther' and password == '967420') or (username == 'Mia' and password == '123456'):  # 简单的用户名密码验证
+        if (username == 'Esther' and password == '967420') or (username == 'Giko' and password == '549030'):  # 简单的用户名密码验证
             session['logged_in'] = True
             return redirect(url_for('index'))
         return render_template('login.html', error='用户名或密码错误')
