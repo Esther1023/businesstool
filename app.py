@@ -13,6 +13,7 @@ import threading
 import time
 from pathlib import Path
 import re
+import json
 from werkzeug.utils import secure_filename
 
 # 全局变量用于延迟导入
@@ -111,15 +112,34 @@ else:
 # 存储最后导入时间
 last_import_time = None
 
-# 初始化状态管理器
+# 初始化状态管理器（按请求动态选择数据文件，不在启动时绑定固定Excel）
 stage_manager = None
 if STAGE_MANAGER_AVAILABLE:
     try:
-        stage_manager = StageManager('六大战区简道云客户.xlsx')
-        logger.info("状态管理器初始化成功")
+        # 不在此处绑定具体Excel，避免不同用户互相影响
+        logger.info("状态管理器类已加载，实例按请求动态创建")
     except Exception as e:
-        logger.warning(f"状态管理器初始化失败: {str(e)}")
+        logger.warning(f"状态管理器初始化提示: {str(e)}")
         stage_manager = None
+
+# 根据当前登录用户选择对应的数据源Excel
+def get_user_excel_path():
+    """返回当前用户应使用的Excel数据文件路径。
+    - Giko 使用 giko.xlsx
+    - 其他用户（含 Esther）使用 六大战区简道云客户.xlsx
+    若目标文件不存在，记录日志并回退到六大战区简道云客户.xlsx。
+    """
+    try:
+        user = (session.get('user') or '').strip().lower()
+    except Exception:
+        user = ''
+    filename = 'giko.xlsx' if user == 'giko' else '六大战区简道云客户.xlsx'
+    path = os.path.join(os.getcwd(), filename)
+    if not os.path.exists(path):
+        fallback = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        logger.warning(f"数据文件不存在: {path}，回退到 {fallback}")
+        return fallback
+    return path
 
 # 自动监控相关变量
 auto_monitor_enabled = False
@@ -235,6 +255,9 @@ def login():
         password = request.form.get('password')
         if (username == 'Esther' and password == '967420') or (username == 'Giko' and password == '549030'):  # 简单的用户名密码验证
             session['logged_in'] = True
+            session['user'] = username
+            # 简单角色划分：Esther 管理/运营，Giko 销售
+            session['role'] = 'admin' if username == 'Esther' else 'sales'
             return redirect(url_for('index'))
         return render_template('login.html', error='用户名或密码错误')
     return render_template('login.html')
@@ -243,6 +266,8 @@ def login():
 @app.route('/logout')
 def logout():
     session.pop('logged_in', None)
+    session.pop('user', None)
+    session.pop('role', None)
     return redirect(url_for('login'))
 
 # 登录保护装饰器
@@ -257,13 +282,25 @@ def login_required(func):
 # 加载Excel数据
 def load_customer_data():
     global last_import_time
-    excel_path = '六大战区简道云客户.xlsx'
+    excel_path = get_user_excel_path()
     try:
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
             return None
         pd = ensure_pandas_imported()
         df = pd.read_excel(excel_path)
+        # 统一常见列名别名，兼容不同数据来源
+        try:
+            if '用户ID' not in df.columns and '简道云ID' in df.columns:
+                df.rename(columns={'简道云ID': '用户ID'}, inplace=True)
+            if '到期日期' not in df.columns and '到期时间' in df.columns:
+                df.rename(columns={'到期时间': '到期日期'}, inplace=True)
+            if '到期日期' not in df.columns and '试用到期时间' in df.columns:
+                df.rename(columns={'试用到期时间': '到期日期'}, inplace=True)
+            if '公司名称' not in df.columns and '账号-企业名称' in df.columns:
+                df.rename(columns={'账号-企业名称': '公司名称'}, inplace=True)
+        except Exception:
+            pass
         return df
     except Exception as e:
         logger.error(f"Excel加载错误: {str(e)}")
@@ -272,11 +309,177 @@ def load_customer_data():
 @app.route('/')
 @login_required
 def index():
+    role = session.get('role', 'admin')
+    if role == 'sales':
+        return render_template('sales_dashboard.html', last_import_time=last_import_time)
     return render_template('index.html', last_import_time=last_import_time)
+
+# 销售跟进日记：支持GET/POST，采用JSONL追加，不覆盖
+@app.route('/sales_diary', methods=['GET', 'POST'])
+@login_required
+def sales_diary():
+    diary_path = os.path.join(os.getcwd(), 'uploads', 'sales_diary.jsonl')
+    os.makedirs(os.path.dirname(diary_path), exist_ok=True)
+    if request.method == 'POST':
+        try:
+            data = request.get_json(silent=True) or {}
+            entry = {
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'author': session.get('username') or 'unknown',
+                'jdy_account': (data.get('jdy_account') or '').strip(),
+                'customer_name': (data.get('customer_name') or '').strip(),
+                'note': (data.get('note') or '').strip()
+            }
+            if not entry['jdy_account'] or not entry['note']:
+                return jsonify({'success': False, 'error': '缺少必填项'}), 400
+            with open(diary_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+            return jsonify({'success': True, 'entry': entry})
+        except Exception as e:
+            logger.error(f"保存日记失败: {str(e)}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+    # GET: 返回最近100条，按时间倒序；支持可选账号过滤
+    entries = []
+    if os.path.exists(diary_path):
+        try:
+            with open(diary_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entries.append(json.loads(line))
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.error(f"读取日记失败: {str(e)}")
+            entries = []
+    # 可选过滤
+    jdy_param = (request.args.get('jdy_account') or '').strip()
+    if jdy_param:
+        entries = [e for e in entries if str(e.get('jdy_account','')).strip() == jdy_param]
+    entries = entries[-100:][::-1]
+    return jsonify({'success': True, 'entries': entries, 'filtered_by': jdy_param or None})
 
 @app.route('/test', methods=['GET'])
 def test():
     return 'Hello, World!'
+
+# 账号验证：检查Excel中是否存在该简道云账号，并返回基础信息
+@app.route('/verify_jdy_account', methods=['POST'])
+@login_required
+def verify_jdy_account():
+    try:
+        data = request.get_json(silent=True) or {}
+        jdy_account = str(data.get('jdy_account', '')).strip()
+        if not jdy_account:
+            return jsonify({'success': False, 'error': '请提供简道云账号'}), 400
+
+        excel_path = get_user_excel_path()
+        if not os.path.exists(excel_path):
+            return jsonify({'success': False, 'error': '数据文件不存在'}), 500
+
+        pd = ensure_pandas_imported()
+        try:
+            df = pd.read_excel(excel_path)
+        except Exception as e:
+            logger.error(f"读取Excel失败: {str(e)}")
+            return jsonify({'success': False, 'error': '数据文件读取失败'}), 500
+
+        # 统一为字符串进行匹配（包含匹配，兼容完整或部分输入）
+        matches = df[df['用户ID'].astype(str).str.contains(jdy_account, case=False, na=False)]
+        exists = not matches.empty
+        info = None
+        if exists:
+            row = matches.iloc[0]
+            info = {
+                'jdy_account': str(row.get('用户ID', '')),
+                'company_name': str(row.get('公司名称', '')) or str(row.get('账号-企业名称', '')),
+                'tax_number': str(row.get('纳税人识别号', '')) or str(row.get('账号-纳税人识别号', '')),
+                'integration_mode': str(row.get('集成模式', '')),
+                'customer_classification': str(row.get('客户分类', ''))
+            }
+        return jsonify({'success': True, 'exists': exists, 'matched_count': int(len(matches)), 'info': info})
+    except Exception as e:
+        logger.error(f"账号验证失败: {str(e)}")
+        return jsonify({'success': False, 'error': '账号验证服务异常'}), 500
+
+# 单账号历史跟进记录查询：返回该账号的所有历史记录（完整信息）
+@app.route('/sales_diary_query', methods=['GET'])
+@login_required
+def sales_diary_query():
+    try:
+        jdy_account = str(request.args.get('jdy_account', '')).strip()
+        if not jdy_account:
+            return jsonify({'success': False, 'error': '请提供简道云账号'}), 400
+        diary_path = os.path.join(os.getcwd(), 'uploads', 'sales_diary.jsonl')
+        entries = []
+
+        # 1) 读取 JSONL 追加的跟进日记
+        if os.path.exists(diary_path):
+            try:
+                with open(diary_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            obj = json.loads(line)
+                            if str(obj.get('jdy_account', '')).strip() == jdy_account:
+                                entries.append(obj)
+                        except Exception:
+                            continue
+            except Exception:
+                pass
+
+        # 2) 兼容从 Excel 中读取“跟进记录/跟进日期”并合并（只读，不写）
+        try:
+            excel_path = get_user_excel_path()
+            if os.path.exists(excel_path):
+                pd = ensure_pandas_imported()
+                df = pd.read_excel(excel_path)
+                # 列名归一化
+                try:
+                    if '用户ID' not in df.columns and '简道云ID' in df.columns:
+                        df.rename(columns={'简道云ID': '用户ID'}, inplace=True)
+                    if '公司名称' not in df.columns and '账号-企业名称' in df.columns:
+                        df.rename(columns={'账号-企业名称': '公司名称'}, inplace=True)
+                    if '跟进日期' not in df.columns and '跟进时间' in df.columns:
+                        df.rename(columns={'跟进时间': '跟进日期'}, inplace=True)
+                    if '跟进记录' not in df.columns and '跟进日记' in df.columns:
+                        df.rename(columns={'跟进日记': '跟进记录'}, inplace=True)
+                except Exception:
+                    pass
+
+                if '用户ID' in df.columns:
+                    matches = df[df['用户ID'].astype(str).str.contains(jdy_account, case=False, na=False)]
+                    for _, row in matches.iterrows():
+                        note = row.get('跟进记录', '')
+                        date_val = row.get('跟进日期', '')
+                        if note is not None and str(note).strip() and str(note).lower() != 'nan':
+                            # 尝试格式化日期
+                            ts = ''
+                            try:
+                                if pd.notna(date_val) and str(date_val).strip() and str(date_val).lower() != 'nan':
+                                    ts = pd.to_datetime(date_val).strftime('%Y-%m-%d')
+                            except Exception:
+                                ts = ''
+                            entries.append({
+                                'timestamp': ts or datetime.now().strftime('%Y-%m-%d'),
+                                'author': 'excel',
+                                'jdy_account': str(row.get('用户ID', '')),
+                                'customer_name': str(row.get('公司名称', '')),
+                                'note': str(note)
+                            })
+        except Exception as e:
+            logger.warning(f"从Excel合并日记失败: {str(e)}")
+
+        # 合并后按时间升序
+        entries.sort(key=lambda x: x.get('timestamp', ''))
+        return jsonify({'success': True, 'entries': entries, 'total': len(entries)})
+    except Exception as e:
+        logger.error(f"查询跟进记录失败: {str(e)}")
+        return jsonify({'success': False, 'error': '查询服务异常'}), 500
 @app.route('/upload_excel', methods=['POST'])
 @login_required
 def upload_excel():
@@ -293,7 +496,7 @@ def upload_excel():
             return jsonify({'error': '请上传Excel文件(.xlsx)'}), 400
 
         # 原子写入保存文件：临时文件 + os.replace
-        target_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        target_path = get_user_excel_path()
         tmp_fd, tmp_path = tempfile.mkstemp(prefix='upload_', suffix='.xlsx', dir=os.path.dirname(target_path))
         os.close(tmp_fd)
         try:
@@ -359,7 +562,7 @@ def get_monthly_revenue():
     """获取本月收款总金额"""
     try:
         # 检查文件是否存在
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -453,7 +656,7 @@ def get_future_expiring_customers():
         apply_zone_filter = bool(zones_list) and not (len(zones_list) == 1 and str(zones_list[0]).lower() == 'all')
         logger.info(f"获取未来到期客户（{min_days}-{max_days}天），销售筛选: {sales_filter}，战区筛选: {zones_list if apply_zone_filter else 'all'}")
         # 检查文件是否存在
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -564,7 +767,7 @@ def get_future_expiring_customers():
 def get_sales_representatives():
     try:
         # 检查文件是否存在
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件获取销售代表列表: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -612,7 +815,7 @@ def get_zones():
         ]
 
         # 优先从Excel收集战区，如果不可用则回退到默认列表
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件获取战区列表: {excel_path}")
 
         zones_from_excel = set()
@@ -689,7 +892,7 @@ def get_unsigned_customers():
             max_days = min_days
         
         # 检查文件是否存在
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -857,7 +1060,7 @@ def export_unsigned_customers():
     """导出所有客户数据，包含全部3606行"""
     try:
         # 检查文件是否存在
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -946,7 +1149,7 @@ def get_expiring_customers():
         today = now.date()
         
         # 检查文件是否存在
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         logger.info(f"尝试读取文件: {excel_path}")
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
@@ -1121,7 +1324,7 @@ def query_customer():
             logger.info(f"开始通过公司名称查询: {company_name}")
         
         # 检查文件是否存在
-        excel_path = '六大战区简道云客户.xlsx'
+        excel_path = get_user_excel_path()
         if not os.path.exists(excel_path):
             logger.error(f"文件不存在: {excel_path}")
             return jsonify({'error': '数据文件不存在'}), 500
@@ -1130,17 +1333,27 @@ def query_customer():
             # 确保pandas已延迟导入
             pd = ensure_pandas_imported()
             df = pd.read_excel(excel_path)
+            # 列名归一化：兼容“简道云ID”、“账号-企业名称”
+            try:
+                if '用户ID' not in df.columns and '简道云ID' in df.columns:
+                    df.rename(columns={'简道云ID': '用户ID'}, inplace=True)
+                if '公司名称' not in df.columns and '账号-企业名称' in df.columns:
+                    df.rename(columns={'账号-企业名称': '公司名称'}, inplace=True)
+            except Exception:
+                pass
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
             logger.error(f"Excel读取错误: {str(e)}")
             return jsonify({'error': '数据文件读取失败'}), 500
 
-        # 检查必要的列是否存在
-        required_columns = ['用户ID', '公司名称']
-        for col in required_columns:
-            if col not in df.columns:
-                logger.error(f"Excel文件中缺少'{col}'列")
-                return jsonify({'error': f'数据格式错误：缺少{col}列'}), 500
+        # 检查必要的列是否存在（公司列允许两种：公司名称 或 账号-企业名称）
+        if '用户ID' not in df.columns:
+            logger.error("Excel文件中缺少'用户ID'列")
+            return jsonify({'error': '数据格式错误：缺少用户ID列'}), 500
+        has_company = ('公司名称' in df.columns) or ('账号-企业名称' in df.columns)
+        if not has_company:
+            logger.error("Excel文件中缺少公司名称相关列：公司名称/账号-企业名称")
+            return jsonify({'error': '数据格式错误：缺少公司名称或账号-企业名称列'}), 500
         
         # 根据查询条件进行模糊匹配
         if jdy_id:
@@ -1240,9 +1453,17 @@ def update_stage():
         
         logger.info(f"更新客户阶段: {jdy_id} -> {stage} (force={force})")
         
-        # 使用新的状态管理器
-        if stage_manager:
-            result = stage_manager.update_stage(
+        # 使用新的状态管理器（按用户数据源实例化）
+        mgr = None
+        if STAGE_MANAGER_AVAILABLE:
+            try:
+                mgr = StageManager(get_user_excel_path())
+            except Exception as e:
+                logger.warning(f"状态管理器实例化失败: {str(e)}")
+                mgr = None
+
+        if mgr:
+            result = mgr.update_stage(
                 jdy_id=jdy_id,
                 target_stage=stage,
                 force=force,
@@ -1269,7 +1490,7 @@ def update_stage():
                     return jsonify(result), 500
         else:
             # 降级到原有逻辑
-            logger.warning("状态管理器不可用，使用原有逻辑")
+            logger.warning("状态管理器不可用或初始化失败，使用原有逻辑")
             return _legacy_update_stage(jdy_id, stage)
         
     except Exception as e:
@@ -1284,7 +1505,7 @@ def _legacy_update_stage(jdy_id, stage):
     """原有的状态更新逻辑（降级方案）"""
     try:
         # 读取Excel文件
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         if not os.path.exists(excel_path):
             logger.error(f"Excel文件不存在: {excel_path}")
             return jsonify({'success': False, 'error': 'Excel文件不存在', 'error_type': 'file_not_found'}), 500
@@ -1342,8 +1563,16 @@ def get_stage_history():
         jdy_id = request.args.get('jdy_id')
         limit = int(request.args.get('limit', 100))
         
-        if stage_manager:
-            history = stage_manager.get_stage_history(jdy_id, limit)
+        mgr = None
+        if STAGE_MANAGER_AVAILABLE:
+            try:
+                mgr = StageManager(get_user_excel_path())
+            except Exception as e:
+                logger.warning(f"状态管理器实例化失败: {str(e)}")
+                mgr = None
+
+        if mgr:
+            history = mgr.get_stage_history(jdy_id, limit)
             return jsonify({
                 'success': True,
                 'history': history,
@@ -1385,8 +1614,16 @@ def validate_stage_batch():
                 'error_type': 'validation'
             }), 400
         
-        if stage_manager:
-            results = stage_manager.validate_stage_batch(updates)
+        mgr = None
+        if STAGE_MANAGER_AVAILABLE:
+            try:
+                mgr = StageManager(get_user_excel_path())
+            except Exception as e:
+                logger.warning(f"状态管理器实例化失败: {str(e)}")
+                mgr = None
+
+        if mgr:
+            results = mgr.validate_stage_batch(updates)
             return jsonify({
                 'success': True,
                 'results': results
@@ -1411,11 +1648,19 @@ def validate_stage_batch():
 def get_stage_rules():
     """获取状态转换规则"""
     try:
-        if stage_manager:
+        mgr = None
+        if STAGE_MANAGER_AVAILABLE:
+            try:
+                mgr = StageManager(get_user_excel_path())
+            except Exception as e:
+                logger.warning(f"状态管理器实例化失败: {str(e)}")
+                mgr = None
+
+        if mgr:
             return jsonify({
                 'success': True,
-                'stage_rules': stage_manager.stage_rules,
-                'stage_priority': stage_manager.stage_priority
+                'stage_rules': mgr.stage_rules,
+                'stage_priority': mgr.stage_priority
             })
         else:
             return jsonify({
@@ -2044,7 +2289,7 @@ def update_customer_stage(jdy_id, stage):
     """更新客户阶段的内部函数"""
     try:
         # 读取Excel文件
-        excel_path = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
+        excel_path = get_user_excel_path()
         if not os.path.exists(excel_path):
             return {'success': False, 'error': 'Excel文件不存在'}
         

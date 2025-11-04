@@ -2064,11 +2064,14 @@ document.addEventListener('DOMContentLoaded', function() {
         updateStage('回款', assistId.value.trim());
     });
     
-    // 未签订合同客户功能
-    document.getElementById('btnRefreshUnsigned').addEventListener('click', function() {
-        const zones = (window._selectedZones && window._selectedZones.length > 0) ? window._selectedZones : [];
-        fetchFutureCustomersWithZones(zones);
-    });
+    // 未签订合同客户功能（首页专用；销售页可能没有该按钮）
+    const refreshUnsignedBtn = document.getElementById('btnRefreshUnsigned');
+    if (refreshUnsignedBtn) {
+        refreshUnsignedBtn.addEventListener('click', function() {
+            const zones = (window._selectedZones && window._selectedZones.length > 0) ? window._selectedZones : [];
+            fetchFutureCustomersWithZones(zones);
+        });
+    }
     
     // 未来30天客户筛选功能
     const btnFilterUnsigned = document.getElementById('btnFilterUnsigned');
