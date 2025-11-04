@@ -311,8 +311,8 @@ def load_customer_data():
 def index():
     role = session.get('role', 'admin')
     if role == 'sales':
-        return render_template('sales_dashboard.html', last_import_time=last_import_time)
-    return render_template('index.html', last_import_time=last_import_time)
+        return render_template('sales_dashboard.html', last_import_time=last_import_time, user=session.get('user'))
+    return render_template('index.html', last_import_time=last_import_time, user=session.get('user'))
 
 # 销售跟进日记：支持GET/POST，采用JSONL追加，不覆盖
 @app.route('/sales_diary', methods=['GET', 'POST'])

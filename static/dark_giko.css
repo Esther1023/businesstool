@@ -1,0 +1,170 @@
+/* GIKO 专用深色主题（仅配色，保持现有布局与组件结构） */
+
+:root {
+  /* 高级深色配色变量 */
+  --bg-color: #0f1215;
+  --card-bg-color: #14171a;
+  --panel-bg-color: #171c22;
+  --text-color: #e3e6eb;
+  --text-color-light: #9aa3af;
+  /* 兼容旧样式变量（用于OCR/粘贴板等） */
+  --background-color: #121212; /* 旧样式中的整体背景 */
+  --card-background: #141414; /* 旧样式中的卡片背景 */
+  --light-gray: #1f1f1f; /* 旧样式中的浅灰，用于hover */
+  --primary-color: #5aa2ff;
+  --primary-hover: #3f8cff;
+  --secondary-color: #22303a;
+  --secondary-hover: #1d2a33;
+  --border-color: #2a2f38;
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --input-bg-color: #1a1f24;
+  --input-border-color: #2a2f38;
+  --button-text-color: #0e1620;
+  --success-color: #4bd6a5;
+  --error-color: #ff6b6b;
+  --warning-color: #ffb84d;
+  --info-color: #58c7ff;
+  --gradient-primary: linear-gradient(135deg, #4f82ff, #62d1ff);
+  --gradient-secondary: linear-gradient(135deg, #1f2a37, #2b3643);
+}
+
+/* 启用深色主题的根选择器 */
+body.theme-giko-dark {
+  background: var(--bg-color) !important; /* 覆盖 style.css 中的蓝色渐变 */
+  background-color: var(--bg-color) !important;
+  color: var(--text-color);
+}
+/* 覆盖 html 的蓝色背景（只在Giko主题下生效，因为仅加载本文件） */
+html { background-color: #0f1215 !important; background-image: none !important; }
+
+/* 将主题调整为黑白灰阶（覆盖变量） */
+.theme-giko-dark {
+  --primary-color: #d9d9d9;
+  --primary-hover: #c7c7c7;
+  --gradient-primary: linear-gradient(135deg, #e6e6e6, #cfcfcf);
+  --button-text-color: #1a1a1a;
+  --secondary-color: #2a2a2a;
+  --secondary-hover: #3a3a3a;
+  --gradient-secondary: linear-gradient(135deg, #262626, #3a3a3a);
+  --info-color: #bfbfbf;
+}
+
+/* 卡片与面板 */
+.theme-giko-dark .card,
+.theme-giko-dark .assist-panel,
+.theme-giko-dark .smart-calculator,
+.theme-giko-dark .dashboard-container {
+  background: var(--card-bg-color);
+  border-color: var(--border-color);
+  box-shadow: 0 12px 30px var(--shadow-color);
+}
+
+/* 标题与说明文字 */
+.theme-giko-dark h2,
+.theme-giko-dark h3,
+.theme-giko-dark label { color: var(--text-color); }
+.theme-giko-dark .assist-help,
+.theme-giko-dark .upload-hint,
+.theme-giko-dark .clipboard-hint,
+.theme-giko-dark .loading { color: var(--text-color-light); }
+
+/* 输入与文本域 */
+.theme-giko-dark .form-control,
+.theme-giko-dark textarea,
+.theme-giko-dark input[type="text"],
+.theme-giko-dark input[type="number"],
+.theme-giko-dark input[type="file"] {
+  background: var(--input-bg-color);
+  border: 1px solid var(--input-border-color);
+  color: var(--text-color);
+}
+.theme-giko-dark .form-control::placeholder,
+.theme-giko-dark textarea::placeholder { color: var(--text-color-light); }
+
+/* 按钮（保持既有尺寸与圆角，仅调色） */
+.theme-giko-dark .btn {
+  /* 黑白灰精致渐变 */
+  background-image: linear-gradient(180deg, #f2f2f2 0%, #dcdcdc 50%, #c9c9c9 100%);
+  background-color: #dcdcdc; /* 渐变回退 */
+  color: #1a1a1a;
+  border: 1px solid #bdbdbd;
+  box-shadow: 0 2px 0 #b6b6b6, 0 6px 14px rgba(0,0,0,0.25);
+  transition: transform 120ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+.theme-giko-dark .btn:hover {
+  filter: brightness(1.02);
+  box-shadow: 0 3px 0 #b1b1b1, 0 10px 18px rgba(0,0,0,0.30);
+  transform: translateY(-1px);
+}
+.theme-giko-dark .btn:active {
+  background-image: linear-gradient(180deg, #d9d9d9 0%, #c6c6c6 50%, #b8b8b8 100%);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
+  transform: translateY(0);
+}
+.theme-giko-dark .btn.btn-secondary {
+  background-image: linear-gradient(180deg, #3a3a3a 0%, #2e2e2e 60%, #262626 100%);
+  background-color: #2e2e2e;
+  color: #e6e6e6;
+  border: 1px solid #3f3f3f;
+  box-shadow: 0 2px 0 #222, 0 6px 14px rgba(0,0,0,0.35);
+}
+.theme-giko-dark .btn.btn-secondary:hover {
+  filter: brightness(1.03);
+  box-shadow: 0 3px 0 #222, 0 10px 18px rgba(0,0,0,0.40);
+}
+.theme-giko-dark .btn.btn-secondary:active {
+  background-image: linear-gradient(180deg, #343434 0%, #2a2a2a 60%, #222 100%);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
+}
+
+/* 计算器/到期提醒区域内文本与分隔线 */
+.theme-giko-dark .calculator-header { border-bottom: 1px solid var(--border-color); }
+.theme-giko-dark .calculator-display { background: var(--panel-bg-color); }
+.theme-giko-dark .close-btn { color: var(--text-color); }
+
+/* 悬浮球与基础阴影 */
+.theme-giko-dark .assist-ball { box-shadow: 0 10px 24px var(--shadow-color); }
+
+/* 表格（若存在） */
+.theme-giko-dark .customer-table { background: var(--panel-bg-color); }
+.theme-giko-dark .customer-table th,
+.theme-giko-dark .customer-table td {
+  border-color: var(--border-color);
+  color: var(--text-color);
+}
+
+/* —— 修正 OCR 与粘贴板模块的白底 —— */
+.theme-giko-dark .ocr-section .image-upload-container { background: transparent; }
+.theme-giko-dark .ocr-section .image-upload-area {
+  background: #1a1a1a;
+  border: 1px dashed #3a3a3a;
+}
+.theme-giko-dark .ocr-section .upload-content { color: var(--text-color); }
+.theme-giko-dark .ocr-section .upload-hint { color: var(--text-color-light); }
+.theme-giko-dark .ocr-section .image-preview {
+  background: #141414;
+  border: 1px solid #2a2a2a;
+}
+.theme-giko-dark .ocr-section .preview-actions .btn-secondary {
+  background-image: var(--gradient-secondary);
+  color: var(--text-color);
+}
+
+.theme-giko-dark .clipboard-section .clipboard-container { background: transparent; }
+.theme-giko-dark .clipboard-section .clipboard-area {
+  background: #1a1a1a;
+  border: 1px dashed #3a3a3a;
+}
+.theme-giko-dark .clipboard-section .clipboard-content { background: #1a1a1a !important; border: 2px dashed #3a3a3a !important; }
+.theme-giko-dark .clipboard-section .clipboard-text { color: var(--text-color); }
+.theme-giko-dark #clipboardTextarea {
+  background: #121212;
+  border: 1px solid #2a2a2a;
+  color: var(--text-color);
+}
+
+/* 到期提醒列表中强制采用灰阶文本，覆盖内联红色 */
+.theme-giko-dark .smart-calculator .calculator-display div { color: var(--text-color) !important; }
+.theme-giko-dark .image-upload-container { background-color: var(--card-background) !important; border-color: #3a3a3a !important; }
+.theme-giko-dark .image-upload-area { background-color: #1a1a1a !important; }
+.theme-giko-dark .image-upload-area:hover { background-color: var(--light-gray) !important; }

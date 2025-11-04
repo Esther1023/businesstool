@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>销售工作台</title>
     <link rel="stylesheet" href="/static/style.css">
+    {% if user == 'Giko' %}
+    <link rel="stylesheet" href="/static/dark_giko.css">
+    {% endif %}
     <style>
       /* 销售视图：更简洁的布局与更大的触控目标 */
       .sales-container { max-width: 1100px; margin: 20px auto; padding: 10px; }
@@ -17,9 +20,25 @@
       .btn-secondary { background: var(--secondary-color); }
       .assist-calendar { margin-top:16px; }
       /* 只保留必需元素的基本样式 */
+
+      /* —— Esther 布局参考：加入固定左侧栏（仅布局，不改 UI） —— */
+      .layout-sidebar { position: fixed; left: 20px; top: 90px; width: 320px; z-index: 9; }
+      .layout-sidebar .card { margin-bottom: 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+      /* 主内容右移，给侧栏留出空间 */
+      body.show-scrollbars .sales-container { margin-left: 360px; }
+      /* 小屏下隐藏侧栏，恢复居中 */
+      @media (max-width: 1100px) {
+        .layout-sidebar { display: none; }
+        body.show-scrollbars .sales-container { margin-left: auto; }
+      }
     </style>
 </head>
-<body class="show-scrollbars">
+<body class="{% if user == 'Giko' %}theme-giko-dark {% endif %}show-scrollbars">
+  <!-- 左侧固定侧栏，仅用于布局承载提醒与备忘录（不改变 UI 风格） -->
+  <aside id="layoutSidebar" class="layout-sidebar" aria-label="侧栏">
+    <div class="card" id="sidebarExpiringMount"></div>
+    <div class="card" id="sidebarMemoMount"></div>
+  </aside>
   <div class="sales-container">
     <div class="sales-header">
       <div class="monitor-controls">
@@ -198,24 +217,14 @@
     <div id="assistBall" class="assist-ball" title="快捷操作（Ctrl/⌘ + Shift + K）">⚡</div>
     <div id="assistPanel" class="assist-panel" aria-hidden="true">
       <div class="assist-panel-body">
-        <button id="assistClose" class="btn btn-secondary">关闭</button>
-        <input id="assistId" class="assist-input" placeholder="简道云账号">
-        <textarea id="assistMemo" class="memo-textarea" placeholder="备注"></textarea>
-        <div style="display:flex; gap:6px; margin:8px 0;">
-          <button id="btnStageContract" class="btn">合同</button>
-          <button id="btnStageInvoice" class="btn">开票</button>
-          <button id="btnStageAdvanceInvoice" class="btn">提前开</button>
-          <button id="btnStageInvalid" class="btn">无效</button>
-          <button id="btnStageUpsell" class="btn">增购</button>
-          <button id="btnStageLost" class="btn">失联</button>
-          <button id="btnStagePaid" class="btn">回款</button>
-        </div>
-        <div id="assistAnswer" class="assist-help">提示：销售看板专用视图</div>
+        
         <!-- 将跟进日记功能嵌入悬浮面板 -->
         <div class="assist-subsection" style="margin-top:10px; border-top:1px solid var(--border-color); padding-top:10px;">
           <div class="assist-section-title" style="font-weight:600; color: var(--text-color);">跟进日记</div>
           <div class="form-group"><input id="diaryJdy" class="form-control" placeholder="简道云账号，如：123456abcdef" required></div>
           <div class="form-group"><input id="diaryCompany" class="form-control" placeholder="公司名称（可选）"></div>
+          <div class="form-group"><input id="diaryContact" class="form-control" placeholder="联系人（可选）"></div>
+          <div class="form-group"><input id="diaryPhone" class="form-control" placeholder="手机号（可选）"></div>
           <div class="form-group"><textarea id="diaryNote" class="form-control" rows="3" placeholder="今天和客户沟通了什么..." required></textarea></div>
           <div class="form-group" style="display:flex; gap:8px; align-items:center;">
             <button id="btnAddDiary" class="btn btn-secondary">添加记录</button>
@@ -226,6 +235,7 @@
         </div>
       </div>
     </div>
+
   </div>
 
   <script src="/static/script.js"></script>

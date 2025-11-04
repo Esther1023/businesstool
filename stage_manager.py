@@ -202,6 +202,16 @@ class StageManager:
                 try:
                     pd = ensure_pandas_imported()
                     df = pd.read_excel(self.excel_path)
+                    
+                    # 兼容列名：将常见ID列重命名为“用户ID”
+                    if '用户ID' not in df.columns:
+                        id_aliases = ['简道云ID', '简道云账号', '账号ID', '用户唯一ID', '客户唯一ID', '用户id', 'ID']
+                        for alias in id_aliases:
+                            if alias in df.columns:
+                                df.rename(columns={alias: '用户ID'}, inplace=True)
+                                self.stage_logger.info(f"兼容列名：将'{alias}'重命名为'用户ID'")
+                                break
+
                 except Exception as e:
                     error_msg = f"读取Excel文件失败: {str(e)}"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)

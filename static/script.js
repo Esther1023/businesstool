@@ -821,11 +821,25 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message,
     // 组装提醒看板
     alertContainer.appendChild(alertHeader);
     alertContainer.appendChild(alertContent);
-    document.body.appendChild(alertContainer);
+    // 优先挂载到侧栏容器（仅布局，不改 UI）
+    const sidebarMount = document.getElementById('sidebarExpiringMount');
+    if (sidebarMount) {
+        // 清理旧内容后插入
+        sidebarMount.innerHTML = '';
+        sidebarMount.appendChild(alertContainer);
+    } else {
+        document.body.appendChild(alertContainer);
+    }
 
     // 添加关闭按钮事件
     closeBtn.addEventListener('click', function() {
-        alertContainer.remove();
+        // 如果挂载在侧栏，则清理侧栏内容；否则移除容器
+        const mount = alertContainer.parentElement;
+        if (mount && mount.id === 'sidebarExpiringMount') {
+            mount.innerHTML = '';
+        } else {
+            alertContainer.remove();
+        }
     });
     
     // 添加筛选按钮事件
@@ -1055,8 +1069,15 @@ function showFutureExpiringCustomersDashboard(estherCustomers, otherCustomers) {
     dashboardContainer.appendChild(dashboardHeader);
     dashboardContainer.appendChild(dashboardBody);
 
-    // 添加到页面
-    document.body.appendChild(dashboardContainer);
+    // 优先挂载到侧栏容器（仅布局，不改 UI）
+    const memoMount = document.getElementById('sidebarMemoMount');
+    if (memoMount) {
+        memoMount.innerHTML = '';
+        memoMount.appendChild(dashboardContainer);
+    } else {
+        // 添加到页面（回退）
+        document.body.appendChild(dashboardContainer);
+    }
 }
 
 
@@ -2003,18 +2024,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const assistAnswer = document.getElementById('assistAnswer');
     
     // 悬浮球点击事件
-    assistBall.addEventListener('click', function() {
-        toggleAssistPanel();
-    });
+    if (assistBall) {
+        assistBall.addEventListener('click', function() {
+            toggleAssistPanel();
+        });
+    }
     
     // 关闭按钮点击事件
-    assistClose.addEventListener('click', function() {
-        closeAssistPanel();
-    });
+    if (assistClose) {
+        assistClose.addEventListener('click', function() {
+            closeAssistPanel();
+        });
+    }
     
     // 键盘快捷键 Ctrl/⌘ + Shift + K
     document.addEventListener('keydown', function(e) {
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'K') {
+            if (!assistPanel || !assistBall) return; // 元素不存在时忽略
             e.preventDefault();
             toggleAssistPanel();
         }
@@ -2022,6 +2048,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 点击面板外部关闭
     document.addEventListener('click', function(e) {
+        if (!assistPanel || !assistBall) return; // 元素不存在时忽略
         if (!assistPanel.contains(e.target) && !assistBall.contains(e.target)) {
             closeAssistPanel();
         }
@@ -2035,34 +2062,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 推进阶段按钮事件
-    document.getElementById('btnStageContract').addEventListener('click', function() {
-        updateStage('合同', assistId.value.trim());
-    });
-    
-    document.getElementById('btnStageInvoice').addEventListener('click', function() {
-        updateStage('开票', assistId.value.trim());
-    });
-    
-    document.getElementById('btnStageAdvanceInvoice').addEventListener('click', function() {
-        updateStage('提前开', assistId.value.trim());
-    });
-    
-    document.getElementById('btnStageInvalid').addEventListener('click', function() {
-        updateStage('无效', assistId.value.trim());
-    });
-    
-    document.getElementById('btnStageUpsell').addEventListener('click', function() {
-        updateStage('增购', assistId.value.trim());
-    });
-    
-    document.getElementById('btnStageLost').addEventListener('click', function() {
-        updateStage('失联', assistId.value.trim());
-    });
-    
-    document.getElementById('btnStagePaid').addEventListener('click', function() {
-        updateStage('回款', assistId.value.trim());
-    });
+    // 推进阶段按钮事件（元素可能不存在，需判断）
+    const bindStageBtn = (id, stage) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('click', function() {
+            updateStage(stage, (assistId && assistId.value ? assistId.value.trim() : ''));
+        });
+    };
+    bindStageBtn('btnStageContract', '合同');
+    bindStageBtn('btnStageInvoice', '开票');
+    bindStageBtn('btnStageAdvanceInvoice', '提前开');
+    bindStageBtn('btnStageInvalid', '无效');
+    bindStageBtn('btnStageUpsell', '增购');
+    bindStageBtn('btnStageLost', '失联');
+    bindStageBtn('btnStagePaid', '回款');
     
     // 未签订合同客户功能（首页专用；销售页可能没有该按钮）
     const refreshUnsignedBtn = document.getElementById('btnRefreshUnsigned');
