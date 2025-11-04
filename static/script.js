@@ -673,8 +673,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('contractForm')) {
         console.log('页面已加载，开始初始化...');
         
-        // 立即创建到期客户提醒看板
-        createExpiringCustomersReminder();
+        // Giko 销售页不显示到期客户看板；其他页面保留
+        if (!document.body.classList.contains('theme-giko-dark')) {
+            createExpiringCustomersReminder();
+        }
         
         // 延迟显示备忘录白板
         setTimeout(() => {
@@ -1090,8 +1092,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('contractForm')) {
         console.log('页面已加载，开始初始化...');
         
-        // 立即创建到期客户提醒看板
-        createExpiringCustomersReminder();
+        // Giko 销售页不显示到期客户看板；其他页面保留
+        if (!document.body.classList.contains('theme-giko-dark')) {
+            createExpiringCustomersReminder();
+        }
         
         // 延迟显示备忘录白板
         setTimeout(() => {

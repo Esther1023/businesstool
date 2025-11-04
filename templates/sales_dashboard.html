@@ -10,7 +10,8 @@
     {% endif %}
     <style>
       /* 销售视图：更简洁的布局与更大的触控目标 */
-      .sales-container { max-width: 1100px; margin: 20px auto; padding: 10px; }
+      /* 右对齐内容：靠近右边 */
+      .sales-container { max-width: 1100px; margin: 20px 20px 10px auto; padding: 10px; }
       .sales-header { display:flex; justify-content: space-between; align-items:center; }
       .sales-header h2 { margin:0; color: var(--text-color); }
       .monitor-controls { display:flex; gap:8px; }
@@ -22,10 +23,11 @@
       /* 只保留必需元素的基本样式 */
 
       /* —— Esther 布局参考：加入固定左侧栏（仅布局，不改 UI） —— */
-      .layout-sidebar { position: fixed; left: 20px; top: 90px; width: 320px; z-index: 9; }
+      .layout-sidebar { position: fixed; left: 20px; top: 90px; width: 320px; z-index: 9; display: none; }
       .layout-sidebar .card { margin-bottom: 16px; border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
       /* 主内容右移，给侧栏留出空间 */
-      body.show-scrollbars .sales-container { margin-left: 360px; }
+      /* 侧栏禁用时不需要左侧预留 */
+      body.show-scrollbars .sales-container { margin-left: auto; }
       /* 小屏下隐藏侧栏，恢复居中 */
       @media (max-width: 1100px) {
         .layout-sidebar { display: none; }
