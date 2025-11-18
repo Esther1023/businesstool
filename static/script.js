@@ -2496,18 +2496,21 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '</div>';
         
         filterContainer.innerHTML = html;
-        // 在筛选器下方添加“导出后台所有客户数据”按钮（固定位置，独立于列表数量）
-        let exportMount = document.getElementById('exportBackendAllMount');
-        if (!exportMount) {
-            filterContainer.insertAdjacentHTML('afterend', '<div id="exportBackendAllMount" style="margin: 8px 0 12px; text-align: center;"><button id="btnExportBackendAll" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">📁 导出所有客户数据</button></div>');
-        }
-        const exportAllBtn = document.getElementById('btnExportBackendAll');
-        if (exportAllBtn && !exportAllBtn.__bound) {
-            exportAllBtn.addEventListener('click', function() {
+        // 将导出按钮移动到看板标题右侧，减少占用空间
+        const boardRoot = filterContainer.closest('.assist-unsigned');
+        const headerControls = boardRoot ? boardRoot.querySelector('.unsigned-header .monitor-controls') : null;
+        if (headerControls && !document.getElementById('btnExportBackendAllHeader')) {
+            const btn = document.createElement('button');
+            btn.id = 'btnExportBackendAllHeader';
+            btn.className = 'btn btn-secondary';
+            btn.textContent = '📁 导出所有客户数据';
+            btn.style.marginLeft = '6px';
+            btn.style.minWidth = 'auto';
+            headerControls.appendChild(btn);
+            btn.addEventListener('click', function() {
                 const exportUrl = '/export_unsigned_customers';
                 window.open(exportUrl, '_blank');
             });
-            exportAllBtn.__bound = true;
         }
         
         // 添加事件监听器
