@@ -253,11 +253,11 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        if (username == 'Esther' and password == '967420') or (username == 'Giko' and password == '549030'):  # 简单的用户名密码验证
+        if (username == 'Esther' and password == '967420') or (username == 'Giko' and password == '549030') or (username == 'mia' and password == '123456'):  # 简单的用户名密码验证
             session['logged_in'] = True
             session['user'] = username
             # 简单角色划分：Esther 管理/运营，Giko 销售
-            session['role'] = 'admin' if username == 'Esther' else 'sales'
+            session['role'] = 'admin' if username in ('Esther', 'mia') else 'sales'
             return redirect(url_for('index'))
         return render_template('login.html', error='用户名或密码错误')
     return render_template('login.html')
