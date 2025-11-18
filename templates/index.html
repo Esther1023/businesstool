@@ -1528,6 +1528,9 @@
             <!-- 识别你的唯一ID：简道云账号 -->
             <input id="assistId" class="assist-input" placeholder="简道云账号（外部ID）自动识别，必要时手填">
             <div class="assist-row">
+                <button id="btnExportAllCustomers" class="btn btn-secondary">📊 导出所有客户列表</button>
+            </div>
+            <div class="assist-row">
                 <button id="btnStageContract" class="btn">合同</button>
                 <button id="btnStageInvoice" class="btn">开票</button>
             </div>
@@ -1556,6 +1559,18 @@
                     <div id="unsignedCustomersList" class="unsigned-list">
                         <div class="loading" style="text-align: center; color: #666; padding: 10px;">加载中...</div>
                     </div>
+                </div>
+            </div>
+
+            <div class="assist-unsigned">
+                <div class="unsigned-header">
+                    <h4>本地未同步变更</h4>
+                    <div class="monitor-controls">
+                        <button id="btnSyncLocalOps" class="btn btn-secondary">⤴️ 一键同步</button>
+                    </div>
+                </div>
+                <div class="unsigned-body">
+                    <div id="unsyncedOpsList" class="unsigned-list"></div>
                 </div>
             </div>
 

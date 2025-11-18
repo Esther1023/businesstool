@@ -363,7 +363,7 @@ html::-webkit-scrollbar {
 
 .dashboard-body {
     padding: 0;
-    overflow: hidden;
+    overflow: auto;
     height: 240px;
     display: flex;
     flex-direction: column;
@@ -399,7 +399,8 @@ html::-webkit-scrollbar {
     font-family: inherit !important;
     box-sizing: border-box !important;
     overflow-x: hidden !important;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
     scrollbar-width: none !important; /* Firefox */
     -ms-overflow-style: none !important; /* IE/Edge legacy */
 }

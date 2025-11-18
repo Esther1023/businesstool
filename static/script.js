@@ -2066,12 +2066,42 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // 推进阶段按钮事件（元素可能不存在，需判断）
+    const getLocalStageOps = () => { try { return JSON.parse(localStorage.getItem('stage-ops') || '{}'); } catch (e) { return {}; } };
+    const setLocalStageOps = (ops) => { localStorage.setItem('stage-ops', JSON.stringify(ops)); };
+    const recordLocalStageOp = (jdyId, stage) => {
+        if (!jdyId) return;
+        const ops = getLocalStageOps();
+        ops[jdyId] = { stage, ts: Date.now(), status: 'pending' };
+        setLocalStageOps(ops);
+    };
+    const markStageOpSynced = (jdyId) => {
+        const ops = getLocalStageOps();
+        if (ops[jdyId]) { ops[jdyId].status = 'synced'; setLocalStageOps(ops); }
+    };
+    const getUnsyncedCount = () => {
+        const ops = getLocalStageOps();
+        return Object.values(ops).filter(v => v && v.status === 'pending').length;
+    };
+    const renderUnsyncedBanner = () => {
+        const container = document.getElementById('status-filter-container');
+        if (!container) return;
+        let banner = document.getElementById('unsyncedBanner');
+        const count = getUnsyncedCount();
+        if (count > 0) {
+            const html = `<div id="unsyncedBanner" style="margin:6px 0;padding:6px;border:1px solid #faad14;background:#fffbe6;color:#ad6800;border-radius:4px;font-size:12px;">检测到 ${count} 条本地未同步状态，已优先显示本地修改</div>`;
+            if (banner) { banner.outerHTML = html; } else { container.insertAdjacentHTML('beforebegin', html); }
+        } else if (banner) {
+            banner.remove();
+        }
+    };
     const bindStageBtn = (id, stage) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.addEventListener('click', function() {
-            updateStage(stage, (assistId && assistId.value ? assistId.value.trim() : ''));
+            const jdyId = (assistId && assistId.value ? assistId.value.trim() : '');
+            if (jdyId) recordLocalStageOp(jdyId, stage);
+            updateStage(stage, jdyId);
+            renderUnsyncedBanner();
         });
     };
     bindStageBtn('btnStageContract', '合同');
@@ -2111,8 +2141,63 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
 
-    // 初始化时加载未签订合同客户 - 默认显示NA状态
-    fetchUnsignedCustomers('na');
+    const savedFilter = localStorage.getItem('status-filter') || 'na';
+    fetchUnsignedCustomers(savedFilter);
+    const unsyncedList = document.getElementById('unsyncedOpsList');
+    function renderUnsyncedOpsList() {
+        if (!unsyncedList) return;
+        const container = unsyncedList.closest('.assist-unsigned');
+        const ops = getLocalStageOps();
+        const entries = Object.entries(ops).filter(([k, v]) => v && v.status === 'pending');
+        if (entries.length === 0) {
+            if (container) container.style.display = 'none';
+            unsyncedList.innerHTML = '';
+            return;
+        }
+        if (container) container.style.display = '';
+        let html = '';
+        entries.forEach(([id, v]) => {
+            const time = new Date(v.ts).toLocaleString('zh-CN');
+            html += `
+                <div style="border:1px solid #e0e0e0;border-radius:6px;padding:8px;margin-bottom:6px;background:#fff;display:flex;justify-content:space-between;align-items:center;">
+                    <div style="font-size:12px;color:#333;line-height:1.4;">
+                        <div><strong>账号:</strong> ${id}</div>
+                        <div><strong>阶段:</strong> ${v.stage}</div>
+                        <div><strong>时间:</strong> ${time}</div>
+                    </div>
+                    <div>
+                        <button class="btn btn-secondary" data-sync-id="${id}" style="font-size:12px;padding:4px 8px;">同步</button>
+                    </div>
+                </div>
+            `;
+        });
+        unsyncedList.innerHTML = html;
+        unsyncedList.querySelectorAll('button[data-sync-id]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const jdyId = this.getAttribute('data-sync-id');
+                const op = getLocalStageOps()[jdyId];
+                if (op) updateStage(op.stage, jdyId);
+            });
+        });
+    }
+    renderUnsyncedOpsList();
+    const btnSyncLocalOps = document.getElementById('btnSyncLocalOps');
+    if (btnSyncLocalOps) {
+        btnSyncLocalOps.addEventListener('click', function() {
+            const ops = getLocalStageOps();
+            const entries = Object.entries(ops).filter(([k, v]) => v && v.status === 'pending');
+            entries.forEach(([id, v]) => {
+                updateStage(v.stage, id);
+            });
+        });
+    }
+    const btnExportAll = document.getElementById('btnExportAllCustomers');
+    if (btnExportAll) {
+        btnExportAll.addEventListener('click', function() {
+            const exportUrl = '/export_unsigned_customers';
+            window.open(exportUrl, '_blank');
+        });
+    }
     
     // 页面初次加载主动获取未来30天客户（仅在已选择战区时触发）
     // 避免与状态筛选看板的渲染冲突
@@ -2202,6 +2287,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 同步刷新战区视图（空数组表示全部战区）
                 const zones = Array.isArray(window._selectedZones) ? window._selectedZones : [];
                 fetchFutureCustomersWithZones(zones);
+                markStageOpSynced(jdyId);
+                renderUnsyncedBanner();
+                renderUnsyncedOpsList();
             } else {
                 // 处理不同类型的错误
                 handleStageUpdateError(data, stage, jdyId);
@@ -2347,13 +2435,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // 显示客户列表 - 不显示数量统计信息
         let html = '';
         
-        // 添加导出按钮
-        html += `<div style="margin-bottom: 10px; text-align: center;">
-            <button id="exportUnsignedCustomers" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">📊 导出所有客户列表</button>
-        </div>`;
-        
+        const localOps = getLocalStageOps();
         data.customers.forEach(customer => {
-            const stageText = (customer.customer_stage && customer.customer_stage.trim()) ? customer.customer_stage : 'NA';
+            let stageText = (customer.customer_stage && customer.customer_stage.trim()) ? customer.customer_stage : 'NA';
+            const op = localOps[customer.jdy_account];
+            const overridden = op && op.status === 'pending' && op.stage;
+            if (overridden) stageText = op.stage;
             const stageClass = getStageClass(stageText);
             html += `
                 <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
@@ -2362,7 +2449,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
                         <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
                         <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
-                        <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${stageText}</span></div>
+                        <div style="margin-bottom: 2px;"><strong>状态:</strong> <span class="${stageClass}">${stageText}</span>${overridden ? '<span style="margin-left:6px;color:#fa8c16;font-size:11px;">(本地未同步)</span>' : ''}</div>
                         ${customer.integration_mode ? `<div style="margin-bottom: 2px;"><strong>集成模式:</strong> ${getIntegrationModeTip(customer.integration_mode)}</div>` : ''}
                     </div>
                 </div>
@@ -2370,15 +2457,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         unsignedList.innerHTML = html;
+        renderUnsyncedOpsList();
         
-        // 为导出按钮添加点击事件
-        const exportBtn = document.getElementById('exportUnsignedCustomers');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', function() {
-                const exportUrl = '/export_unsigned_customers';
-                window.open(exportUrl, '_blank');
-            });
-        }
+        // 导出按钮事件由筛选器区域的固定按钮负责
     }
 
     // 获取集成模式提醒
@@ -2415,15 +2496,33 @@ document.addEventListener('DOMContentLoaded', function() {
         html += '</div>';
         
         filterContainer.innerHTML = html;
+        // 在筛选器下方添加“导出后台所有客户数据”按钮（固定位置，独立于列表数量）
+        let exportMount = document.getElementById('exportBackendAllMount');
+        if (!exportMount) {
+            filterContainer.insertAdjacentHTML('afterend', '<div id="exportBackendAllMount" style="margin: 8px 0 12px; text-align: center;"><button id="btnExportBackendAll" class="btn btn-secondary" style="padding: 5px 10px; font-size: 12px;">📁 导出所有客户数据</button></div>');
+        }
+        const exportAllBtn = document.getElementById('btnExportBackendAll');
+        if (exportAllBtn && !exportAllBtn.__bound) {
+            exportAllBtn.addEventListener('click', function() {
+                const exportUrl = '/export_unsigned_customers';
+                window.open(exportUrl, '_blank');
+            });
+            exportAllBtn.__bound = true;
+        }
         
         // 添加事件监听器
         const filterButtons = filterContainer.querySelectorAll('.filter-btn');
         filterButtons.forEach(button => {
             button.addEventListener('click', function() {
                 const filterValue = this.getAttribute('data-filter');
+                localStorage.setItem('status-filter', filterValue);
                 fetchUnsignedCustomers(filterValue);
+                renderUnsyncedBanner();
+                renderUnsyncedOpsList();
             });
         });
+        renderUnsyncedBanner();
+        renderUnsyncedOpsList();
     }
     
     function getFilterLabel(filter) {
