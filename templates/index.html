@@ -428,8 +428,21 @@
                 monthsInput.value = months;
             }
 
-            // 更新总计显示
-            summaryDiv.textContent = `总计：${years}年${months}个月`;
+            // 更新总计显示（含天数，当开始日期完整时）
+            const sy = parseInt(document.getElementById('startYear').value) || 0;
+            const sm = parseInt(document.getElementById('startMonth').value) || 0;
+            const sd = parseInt(document.getElementById('startDay').value) || 0;
+            if ((years > 0 || months > 0) && sy && sm && sd) {
+                const startDateCalc = new Date(sy, sm - 1, sd);
+                const endDateCalc = new Date(startDateCalc);
+                endDateCalc.setFullYear(endDateCalc.getFullYear() + years);
+                endDateCalc.setMonth(endDateCalc.getMonth() + months);
+                endDateCalc.setDate(endDateCalc.getDate() - 1);
+                const totalDays = Math.floor((endDateCalc - startDateCalc) / (24 * 60 * 60 * 1000)) + 1;
+                summaryDiv.textContent = `总计：${years}年${months}个月（${totalDays}天）`;
+            } else {
+                summaryDiv.textContent = `总计：${years}年${months}个月`;
+            }
 
             // 计算结束日期
             calculateEndDate();
@@ -480,6 +493,12 @@
                 endYear.value = endDate.getFullYear();
                 endMonth.value = endDate.getMonth() + 1;
                 endDay.value = endDate.getDate();
+                // 更新总计显示中的天数
+                const summaryDiv = document.getElementById('durationSummary');
+                const totalDays = Math.floor((endDate - startDate) / (24 * 60 * 60 * 1000)) + 1;
+                const yearsVal = parseInt(document.getElementById('serviceYears').value) || 0;
+                const monthsVal = parseInt(document.getElementById('serviceMonths').value) || 0;
+                summaryDiv.textContent = `总计：${yearsVal}年${monthsVal}个月（${totalDays}天）`;
             }
         }
 
