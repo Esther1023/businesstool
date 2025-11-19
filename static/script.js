@@ -2503,7 +2503,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const btn = document.createElement('button');
             btn.id = 'btnExportBackendAllHeader';
             btn.className = 'btn btn-secondary';
-            btn.textContent = '📁 导出所有客户数据';
+            btn.textContent = '📁 导出所有';
             btn.style.marginLeft = '6px';
             btn.style.minWidth = 'auto';
             headerControls.appendChild(btn);

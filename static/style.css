@@ -2257,9 +2257,9 @@ body.compact-layout .btn { padding: 6px 10px; }
 
 .monitor-controls {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
 }
 
 /* 监控区操作按钮紧凑化，避免宽度过大不协调 */
@@ -2662,12 +2662,12 @@ body.compact-layout .btn { padding: 6px 10px; }
 
 /* 重新定义日历样式 - 简洁风格 */
 .assist-calendar {
-    margin-bottom: 20px !important;
+    margin-bottom: 8px !important;
     background: var(--card-background) !important;
     border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
-    padding: 12px 15px !important;
-    min-height: 70px !important; /* 保持当前高度 */
+    padding: 6px 12px !important;
+    min-height: 56px !important;
     text-align: center !important;
     color: var(--text-color) !important;
     display: flex !important;
@@ -2711,15 +2711,20 @@ body.compact-layout .btn { padding: 6px 10px; }
   background: transparent !important;
   border: none !important;
   border-radius: 0 !important;
-  padding: 0 !important;
+  padding: 6px 10px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
 }
 
 /* 保留间距与内容可读性 */
 .unsigned-header h4,
 .monitor-header h4 {
   color: var(--text-color) !important;
-  margin: 0 0 8px 0 !important;
+  margin: 0 !important;
   font-weight: 600 !important;
+  white-space: nowrap !important;
 }
 
 /* 强化关键标签对比度 */
