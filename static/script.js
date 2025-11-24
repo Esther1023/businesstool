@@ -467,10 +467,7 @@ function updateFutureCustomersDisplayWithZones(customers, selectedZones = []) {
 
     let html = '';
 
-    // 添加筛选提示
-    html += `<div style="background: #e3f2fd; padding: 8px; margin-bottom: 10px; border-radius: 4px; text-align: center; font-size: 12px; color: #1976d2;">
-        当前筛选战区：${filterLabel}（${customers.length}个客户）
-    </div>`;
+    
 
     customers.forEach(customer => {
         const expiryLabel = formatExpiryLabel(customer.expiry_date);
