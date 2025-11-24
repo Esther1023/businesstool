@@ -2402,11 +2402,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // 显示客户列表 - 不显示数量统计信息
+        // 显示客户列表（仅前3条） - 不显示数量统计信息
         let html = '';
-        
         const localOps = getLocalStageOps();
-        data.customers.forEach(customer => {
+        const limited = data.customers.slice(0, 3);
+        limited.forEach(customer => {
             let stageText = (customer.customer_stage && customer.customer_stage.trim()) ? customer.customer_stage : 'NA';
             const op = localOps[customer.jdy_account];
             const overridden = op && op.status === 'pending' && op.stage;
