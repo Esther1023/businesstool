@@ -481,7 +481,7 @@ function updateFutureCustomersDisplayWithZones(customers, selectedZones = []) {
                     <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
                     <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
                     ${customer.zone ? `<div style=\"margin-bottom: 2px;\"><strong>战区:</strong> ${customer.zone}</div>` : ''}
-                    <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person || ''}</div>
+                    <div style="margin-bottom: 2px;"><strong>金额:</strong> ${customer.amount || customer.uid_arr || customer.contract_amount || ''}</div>
                 </div>
             </div>
         `;
@@ -588,7 +588,7 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
                     <div style="margin-bottom: 2px;"><strong>公司:</strong> ${customer.company_name}</div>
                     <div style="margin-bottom: 2px;"><strong>账号:</strong> ${customer.jdy_account}</div>
                     ${customer.zone ? `<div style=\"margin-bottom: 2px;\"><strong>战区:</strong> ${customer.zone}</div>` : ''}
-                    <div style="margin-bottom: 2px;"><strong>销售:</strong> ${customer.sales_person}</div>
+                    <div style="margin-bottom: 2px;"><strong>金额:</strong> ${customer.amount || customer.uid_arr || customer.contract_amount || ''}</div>
                     ${customer.customer_stage && customer.customer_stage !== 'NA' ? `<div style=\"margin-bottom: 2px;\"><strong>状态:</strong> ${customer.customer_stage}</div>` : ''}
                 </div>
             </div>
@@ -793,16 +793,16 @@ function showExpiringCustomersAlert(customers, reminderType, todayDate, message,
             zoneDiv.style.fontSize = '12px';
             zoneDiv.textContent = '战区：' + (customer.zone || '');
 
-            const salesDiv = document.createElement('div');
-            salesDiv.style.color = '#333';
-            salesDiv.style.fontSize = '12px';
-            salesDiv.textContent = '销售：' + (customer.sales_person || '');
+            const amountDiv = document.createElement('div');
+            amountDiv.style.color = '#333';
+            amountDiv.style.fontSize = '12px';
+            amountDiv.textContent = '金额：' + (customer.amount || customer.uid_arr || customer.contract_amount || '');
             
             customerItem.appendChild(dateDiv);
             customerItem.appendChild(companyDiv);
             customerItem.appendChild(accountDiv);
             customerItem.appendChild(zoneDiv);
-            customerItem.appendChild(salesDiv);
+            customerItem.appendChild(amountDiv);
             
             customersList.appendChild(customerItem);
         });
@@ -1682,10 +1682,9 @@ function queryCustomer() {
             accountEnterpriseNameElement.textContent = customerData.account_enterprise_name || '暂无数据';
         }
         
-        const integrationMode = customerData.integration_mode || '暂无数据';
-        const integrationModeElement = document.getElementById('integrationMode');
-        if (integrationModeElement) {
-            integrationModeElement.textContent = integrationMode;
+        const versionElement = document.getElementById('version');
+        if (versionElement) {
+            versionElement.textContent = customerData.version || '暂无数据';
         }
         
         const expiryDateElement = document.getElementById('expiryDate');
@@ -1697,43 +1696,17 @@ function queryCustomer() {
         if (uidArrElement) {
             uidArrElement.textContent = customerData.uid_arr || '0元';
         }
-        
-        // 设置客户分类并处理战区名单的样式
-        const customerClassification = document.getElementById('customerClassification');
-        const classificationText = customerData.customer_classification || '暂无数据';
-        
-        if (customerClassification) {
-            // 检查是否是精确的"战区Name名单"
-            if (classificationText === '战区Name名单') {
-                // 移除可能存在的其他样式类
-                customerClassification.classList.remove('pink-text', 'blue-text');
-                
-                // 直接设置内联样式，使用!important确保优先级
-                customerClassification.style.color = '#1890ff !important'; // 明显的蓝色
-                customerClassification.style.fontWeight = '500';
-                customerClassification.style.padding = '2px 6px';
-                customerClassification.style.borderRadius = '4px';
-                customerClassification.style.backgroundColor = 'rgba(24, 144, 255, 0.1)';
-                
-                // 设置文本内容并添加提醒
-                customerClassification.textContent = classificationText + ' ⚠️ 找销售 ';
-            } else {
-                // 重置所有样式
-                customerClassification.classList.remove('pink-text', 'blue-text');
-                customerClassification.style.color = '';
-                customerClassification.style.fontWeight = '';
-                customerClassification.style.padding = '';
-                customerClassification.style.borderRadius = '';
-                customerClassification.style.backgroundColor = '';
-                
-                // 只显示原始文本，不添加提醒
-                customerClassification.textContent = classificationText;
-            }
+
+        const contractAmountElement = document.getElementById('contractAmount');
+        if (contractAmountElement) {
+            contractAmountElement.textContent = customerData.contract_amount || '0元';
         }
         
-        const salesPersonElement = document.getElementById('salesPerson');
-        if (salesPersonElement) {
-            salesPersonElement.textContent = customerData.sales || '暂无数据';
+        
+        
+        const amountEl = document.getElementById('amountDisplay');
+        if (amountEl) {
+            amountEl.textContent = customerData.amount || customerData.uid_arr || customerData.contract_amount || '0元';
         }
         
         // 安全设置可选元素的内容
@@ -1750,8 +1723,7 @@ function queryCustomer() {
         // 显示结果区域
         document.getElementById('customerInfo').style.display = 'block';
         
-        // 显示下单流程提醒
-        showOrderProcessTip(integrationMode);
+        
     })
     .catch(error => {
         console.error('Error:', error);

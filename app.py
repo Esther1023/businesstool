@@ -69,7 +69,7 @@ app = Flask(__name__)
 
 # 简化配置
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key')
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.config['MAX_CONTENT_LENGTH'] = 40 * 1024 * 1024
 
 # 设置日志记录
 log_dir = 'logs'
@@ -111,6 +111,9 @@ else:
 
 # 存储最后导入时间
 last_import_time = None
+_cached_df = None
+_cached_mtime = None
+_cached_path = None
 
 # 初始化状态管理器（按请求动态选择数据文件，不在启动时绑定固定Excel）
 stage_manager = None
@@ -124,21 +127,10 @@ if STAGE_MANAGER_AVAILABLE:
 
 # 根据当前登录用户选择对应的数据源Excel
 def get_user_excel_path():
-    """返回当前用户应使用的Excel数据文件路径。
-    - Giko 使用 giko.xlsx
-    - 其他用户（含 Esther）使用 六大战区简道云客户.xlsx
-    若目标文件不存在，记录日志并回退到六大战区简道云客户.xlsx。
-    """
-    try:
-        user = (session.get('user') or '').strip().lower()
-    except Exception:
-        user = ''
-    filename = 'giko.xlsx' if user == 'giko' else '六大战区简道云客户.xlsx'
-    path = os.path.join(os.getcwd(), filename)
+    """固定返回统一的数据源Excel文件路径：战区客户列表.xlsx"""
+    path = os.path.join(os.getcwd(), '战区客户列表.xlsx')
     if not os.path.exists(path):
-        fallback = os.path.join(os.getcwd(), '六大战区简道云客户.xlsx')
-        logger.warning(f"数据文件不存在: {path}，回退到 {fallback}")
-        return fallback
+        logger.warning(f"数据文件不存在: {path}")
     return path
 
 # 自动监控相关变量
@@ -209,6 +201,22 @@ def get_normalized_sales_person(row):
         sales_person = str(sales_raw)
     
     return normalize_sales_name(sales_person)
+
+# 战区名称标准化函数（去掉“战区/大区/区”后缀，统一空格）
+def normalize_zone(zone_name):
+    if zone_name is None:
+        return ''
+    name = str(zone_name).strip()
+    if not name or name.lower() == 'nan':
+        return ''
+    # 去除全角空格
+    name = name.replace('\u3000', ' ').strip()
+    try:
+        # 去掉末尾后缀：战区/大区/区
+        name = re.sub(r'(战区|大区|区)$', '', name)
+    except Exception:
+        pass
+    return name.strip()
 
 # 健康检查端点
 @app.route('/health')
@@ -304,6 +312,43 @@ def load_customer_data():
         return df
     except Exception as e:
         logger.error(f"Excel加载错误: {str(e)}")
+        return None
+
+def get_cached_df():
+    global _cached_df, _cached_mtime, _cached_path
+    excel_path = get_user_excel_path()
+    if not os.path.exists(excel_path):
+        return None
+    try:
+        mtime = os.path.getmtime(excel_path)
+    except Exception:
+        mtime = None
+    if _cached_df is not None and _cached_mtime == mtime and _cached_path == excel_path:
+        return _cached_df
+    try:
+        pd = ensure_pandas_imported()
+        df = pd.read_excel(excel_path)
+        try:
+            if '用户ID' not in df.columns and '简道云ID' in df.columns:
+                df.rename(columns={'简道云ID': '用户ID'}, inplace=True)
+            if '到期日期' not in df.columns and '到期时间' in df.columns:
+                df.rename(columns={'到期时间': '到期日期'}, inplace=True)
+            if '到期日期' not in df.columns and '试用到期时间' in df.columns:
+                df.rename(columns={'试用到期时间': '到期日期'}, inplace=True)
+            if '公司名称' not in df.columns and '账号-企业名称' in df.columns:
+                df.rename(columns={'账号-企业名称': '公司名称'}, inplace=True)
+        except Exception:
+            pass
+        try:
+            if '到期日期' in df.columns:
+                df['到期日期'] = pd.to_datetime(df['到期日期'], errors='coerce')
+        except Exception:
+            pass
+        _cached_df = df
+        _cached_mtime = mtime
+        _cached_path = excel_path
+        return _cached_df
+    except Exception:
         return None
 
 @app.route('/')
@@ -653,7 +698,9 @@ def get_future_expiring_customers():
             zones_csv = request.args.get('zones')
             if zones_csv:
                 zones_list = [s.strip() for s in str(zones_csv).split(',') if s.strip()]
-        apply_zone_filter = bool(zones_list) and not (len(zones_list) == 1 and str(zones_list[0]).lower() == 'all')
+        # 标准化筛选值（排除'all'）
+        zones_list = [normalize_zone(z) for z in zones_list if str(z).lower() != 'all']
+        apply_zone_filter = bool(zones_list)
         logger.info(f"获取未来到期客户（{min_days}-{max_days}天），销售筛选: {sales_filter}，战区筛选: {zones_list if apply_zone_filter else 'all'}")
         # 检查文件是否存在
         excel_path = get_user_excel_path()
@@ -663,11 +710,10 @@ def get_future_expiring_customers():
             return jsonify({'error': '数据文件不存在'}), 500
 
         try:
-            ensure_pandas_imported()
-            df = pd.read_excel(excel_path)
+            df = get_cached_df()
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
             # 列别名兼容：到期时间 -> 到期日期
-            if '到期日期' not in df.columns and '到期时间' in df.columns:
+            if df is not None and '到期日期' not in df.columns and '到期时间' in df.columns:
                 try:
                     df.rename(columns={'到期时间': '到期日期'}, inplace=True)
                     logger.info("兼容列名：将'到期时间'重命名为'到期日期'")
@@ -727,7 +773,7 @@ def get_future_expiring_customers():
                                     is_nan = pd.isna(zone_value)
                                 except Exception:
                                     is_nan = False
-                                zone_value_str = '' if (zone_value is None or is_nan) else str(zone_value).strip()
+                                zone_value_str = '' if (zone_value is None or is_nan) else normalize_zone(zone_value)
                                 if zone_value_str not in zones_list:
                                     continue
                         else:
@@ -741,8 +787,29 @@ def get_future_expiring_customers():
                             'jdy_account': str(row.get('用户ID', '')),
                             'company_name': str(row.get('账号-企业名称', '')),
                             'sales_person': sales_person,
-                            'zone': str(row.get(zone_col, '')) if zone_col else ''
+                            'zone': (normalize_zone(row.get(zone_col, '')) if zone_col else '')
                         }
+                        try:
+                            arr_val = row.get('应续ARR', '')
+                            if pd.notna(arr_val) and str(arr_val).strip() and str(arr_val).lower() != 'nan':
+                                arr_display = f"{float(str(arr_val).replace(',', ''))}元"
+                            else:
+                                arr_display = '0元'
+                        except Exception:
+                            arr_display = '0元'
+                        try:
+                            contract_val = None
+                            for col in ['合同金额', '合同价', '合同总金额', '合同金额（元）']:
+                                cv = row.get(col, '')
+                                if pd.notna(cv) and str(cv).strip() and str(cv).lower() != 'nan':
+                                    contract_val = str(cv)
+                                    break
+                            contract_display = f"{float(str(contract_val).replace(',', '').replace('元',''))}元" if contract_val else '0元'
+                        except Exception:
+                            contract_display = '0元'
+                        customer_info['uid_arr'] = arr_display
+                        customer_info['contract_amount'] = contract_display
+                        customer_info['amount'] = arr_display if arr_display != '0元' else contract_display
                         
                         future_customers.append(customer_info)
                             
@@ -774,8 +841,7 @@ def get_sales_representatives():
             return jsonify({'error': '数据文件不存在'}), 500
 
         try:
-            ensure_pandas_imported()
-            df = pd.read_excel(excel_path)
+            df = get_cached_df()
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
         except Exception as e:
             logger.error(f"Excel读取错误: {str(e)}")
@@ -843,8 +909,8 @@ def get_zones():
                             is_nan = False
                         if zone_val is None or is_nan:
                             continue
-                        zone_str = str(zone_val).strip()
-                        if zone_str and zone_str != '简道云大区':
+                        zone_str = normalize_zone(zone_val)
+                        if zone_str and zone_str != '简道云':
                             zones_from_excel.add(zone_str)
                 else:
                     logger.warning("Excel文件中缺少战区列 ['战区'、'所属战区'、'归属战区']，将仅使用默认战区列表")
@@ -854,16 +920,19 @@ def get_zones():
             logger.warning(f"数据文件不存在: {excel_path}，将使用默认战区列表")
 
         # 合并默认战区与Excel战区，保持默认顺序，其余追加在后
+        # 标准化默认战区后合并去重
         merged_zones = []
         seen = set()
         for z in default_zones_order:
-            if z not in seen:
-                merged_zones.append(z)
-                seen.add(z)
+            nz = normalize_zone(z)
+            if nz and nz not in seen:
+                merged_zones.append(nz)
+                seen.add(nz)
         for z in sorted(zones_from_excel):
-            if z not in seen:
-                merged_zones.append(z)
-                seen.add(z)
+            nz = normalize_zone(z)
+            if nz and nz not in seen:
+                merged_zones.append(nz)
+                seen.add(nz)
 
         logger.info(f"返回{len(merged_zones)}个战区（含默认与Excel提取，已排除简道云大区）")
         return jsonify({'zones': merged_zones})
@@ -899,8 +968,7 @@ def get_unsigned_customers():
             return jsonify({'customers': [], 'error': '数据文件不存在'}), 500
 
         try:
-            ensure_pandas_imported()
-            df = pd.read_excel(excel_path)
+            df = get_cached_df()
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
             # 列别名兼容：部分数据使用“到期时间”，统一重命名为“到期日期”
             if '到期日期' not in df.columns and '到期时间' in df.columns:
@@ -1138,7 +1206,7 @@ def get_expiring_customers():
                 if v:
                     zones_list.append(v)
         # 去重并保留顺序
-        zones_list = list(dict.fromkeys(zones_list))
+        zones_list = list(dict.fromkeys([normalize_zone(z) for z in zones_list if str(z).lower() != 'all']))
         logger.info(f"=== API调用开始 ===")
         logger.info(f"请求参数 - sales_filter: {sales_filter}, test_mode: {test_mode}, zones: {zones_list}")
         logger.info(f"原始参数 - sales_filter: {request.args.get('sales_filter')}, test_mode: {request.args.get('test_mode')}, zones(raw): {raw_zones}")
@@ -1156,11 +1224,10 @@ def get_expiring_customers():
             return jsonify({'expiring_customers': [], 'error': '数据文件不存在', 'today_date': today.strftime('%Y年%m月%d日')})
 
         try:
-            ensure_pandas_imported()
-            df = pd.read_excel(excel_path)
+            df = get_cached_df()
             logger.info(f"成功读取Excel文件，共{len(df)}行数据")
             # 列别名兼容：到期时间 -> 到期日期
-            if '到期日期' not in df.columns and '到期时间' in df.columns:
+            if df is not None and '到期日期' not in df.columns and '到期时间' in df.columns:
                 try:
                     df.rename(columns={'到期时间': '到期日期'}, inplace=True)
                     logger.info("兼容列名：将'到期时间'重命名为'到期日期'")
@@ -1224,7 +1291,7 @@ def get_expiring_customers():
                                 is_nan_zone = pd.isna(raw_zone_val)
                             except Exception:
                                 is_nan_zone = False
-                            zone_val = '' if (raw_zone_val is None or is_nan_zone) else str(raw_zone_val).strip()
+                            zone_val = '' if (raw_zone_val is None or is_nan_zone) else normalize_zone(raw_zone_val)
                         
                         # 应用战区筛选（如有）
                         if apply_zone_filter:
@@ -1262,6 +1329,27 @@ def get_expiring_customers():
                             'zone': zone_val,
                             'customer_stage': stage_label if stage_label else 'NA'
                         })
+                        try:
+                            arr_val = row.get('应续ARR', '')
+                            if pd.notna(arr_val) and str(arr_val).strip() and str(arr_val).lower() != 'nan':
+                                arr_display = f"{float(str(arr_val).replace(',', ''))}元"
+                            else:
+                                arr_display = '0元'
+                        except Exception:
+                            arr_display = '0元'
+                        try:
+                            contract_val = None
+                            for col in ['合同金额', '合同价', '合同总金额', '合同金额（元）']:
+                                cv = row.get(col, '')
+                                if pd.notna(cv) and str(cv).strip() and str(cv).lower() != 'nan':
+                                    contract_val = str(cv)
+                                    break
+                            contract_display = f"{float(str(contract_val).replace(',', '').replace('元',''))}元" if contract_val else '0元'
+                        except Exception:
+                            contract_display = '0元'
+                        expiring_customers[-1]['uid_arr'] = arr_display
+                        expiring_customers[-1]['contract_amount'] = contract_display
+                        expiring_customers[-1]['amount'] = arr_display if arr_display != '0元' else contract_display
                 except Exception as e:
                     logger.warning(f"日期转换错误: {str(e)}")
                     continue
@@ -1378,9 +1466,15 @@ def query_customer():
         for _, customer_data in matching_rows.iterrows():
             # 处理新字段映射
             account_enterprise_name = str(customer_data.get('账号-企业名称', ''))
-            integration_mode = str(customer_data.get('集成模式', ''))
-            customer_classification = str(customer_data.get('客户分类', ''))
-            
+            version_val = ''
+            try:
+                for col in ['版本', '购买版本', '产品版本', '版本类型']:
+                    v = customer_data.get(col, '')
+                    if pd.notna(v) and str(v).strip() and str(v).lower() != 'nan':
+                        version_val = str(v).strip()
+                        break
+            except Exception:
+                version_val = str(customer_data.get('版本', ''))
             # 处理责任销售字段 - 优先使用续费责任销售，如果为空则使用责任销售中英文
             sales_raw = customer_data.get('续费责任销售', '')
             if pd.isna(sales_raw) or sales_raw == '' or str(sales_raw).lower() == 'nan':
@@ -1391,9 +1485,6 @@ def query_customer():
             sales_cn_en = str(customer_data.get('责任销售中英文', ''))
             jdy_sales = str(customer_data.get('简道云销售', ''))
             
-            logger.info(f"处理客户数据: {customer_data['用户ID']}, 账号-企业名称: {account_enterprise_name}, "
-                      f"集成模式: {integration_mode}, 客户分类: {customer_classification}, "
-                      f"续费责任销售: {sales}, 责任销售中英文: {sales_cn_en}, 简道云销售: {jdy_sales}")
             
             # 处理到期日期
             expiry_date = ''
@@ -1417,19 +1508,46 @@ def query_customer():
                 logger.warning(f"ARR处理错误: {str(e)}")
                 arr_display = '0元'
             
+            # 合同金额
+            try:
+                contract_val = None
+                for col in ['合同金额', '合同价', '合同总金额', '合同金额（元）']:
+                    if col in customer_data:
+                        cv = customer_data.get(col, '')
+                        if pd.notna(cv) and str(cv).strip() and str(cv).lower() != 'nan':
+                            contract_val = str(cv)
+                            break
+                if contract_val is None:
+                    contract_display = '0元'
+                else:
+                    amt = float(str(contract_val).replace(',', '').replace('元', ''))
+                    contract_display = f"{amt}元"
+            except Exception:
+                contract_display = '0元'
+
+            # 计算展示金额：优先应续ARR，否则合同金额
+            amount_display = arr_display if arr_display and arr_display != '0元' else contract_display
+
             results.append({
                 'account_enterprise_name': account_enterprise_name,  # 账号-企业名称
                 'company_name': str(customer_data.get('公司名称', '')),  # 公司名称
                 'tax_number': str(customer_data.get('税号', '')),  # 税号
-                'integration_mode': integration_mode,  # 集成模式
+                'version': version_val,
                 'expiry_date': expiry_date,  # 到期日期
                 'uid_arr': arr_display,  # 应续ARR
-                'customer_classification': customer_classification,  # 客户分类
+                'contract_amount': contract_display,
+                'amount': amount_display,
                 'sales': sales,  # 续费责任销售
                 'sales_cn_en': sales_cn_en,  # 责任销售中英文
                 'jdy_sales': jdy_sales,  # 简道云销售
                 'user_id': str(customer_data.get('用户ID', ''))  # 保留用户ID用于兼容
             })
+
+            logger.info(
+                f"处理客户数据: {customer_data['用户ID']}, 账号-企业名称: {account_enterprise_name}, "
+                f"版本: {version_val}, 应续ARR: {arr_display}, 合同金额: {contract_display}, "
+                f"续费责任销售: {sales}, 责任销售中英文: {sales_cn_en}, 简道云销售: {jdy_sales}"
+            )
 
         logger.info(f"查询成功，找到{len(results)}条匹配记录")
         return jsonify({'results': results})
