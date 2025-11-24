@@ -114,6 +114,8 @@ last_import_time = None
 _cached_df = None
 _cached_mtime = None
 _cached_path = None
+_cached_loaded_at = None
+_cache_ttl_seconds = 300
 
 # 初始化状态管理器（按请求动态选择数据文件，不在启动时绑定固定Excel）
 stage_manager = None
@@ -315,7 +317,7 @@ def load_customer_data():
         return None
 
 def get_cached_df():
-    global _cached_df, _cached_mtime, _cached_path
+    global _cached_df, _cached_mtime, _cached_path, _cached_loaded_at
     excel_path = get_user_excel_path()
     if not os.path.exists(excel_path):
         return None
@@ -323,7 +325,8 @@ def get_cached_df():
         mtime = os.path.getmtime(excel_path)
     except Exception:
         mtime = None
-    if _cached_df is not None and _cached_mtime == mtime and _cached_path == excel_path:
+    now_ts = time.time()
+    if _cached_df is not None and _cached_mtime == mtime and _cached_path == excel_path and _cached_loaded_at is not None and (now_ts - _cached_loaded_at) <= _cache_ttl_seconds:
         return _cached_df
     try:
         pd = ensure_pandas_imported()
@@ -347,6 +350,7 @@ def get_cached_df():
         _cached_df = df
         _cached_mtime = mtime
         _cached_path = excel_path
+        _cached_loaded_at = now_ts
         return _cached_df
     except Exception:
         return None
@@ -556,8 +560,12 @@ def upload_excel():
             logger.error(f"保存文件失败: {str(save_err)}")
             return jsonify({'error': f'文件保存失败: {str(save_err)}'}), 500
         
-        # 更新导入时间
+        global _cached_df, _cached_mtime, _cached_path, _cached_loaded_at
         last_import_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        _cached_df = None
+        _cached_mtime = None
+        _cached_path = None
+        _cached_loaded_at = None
         
         return jsonify({
             'message': '文件上传成功',
