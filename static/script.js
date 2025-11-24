@@ -467,9 +467,9 @@ function updateFutureCustomersDisplayWithZones(customers, selectedZones = []) {
 
     let html = '';
 
-    
+    const limited = customers.slice(0, 3);
 
-    customers.forEach(customer => {
+    limited.forEach(customer => {
         const expiryLabel = formatExpiryLabel(customer.expiry_date);
         html += `
             <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
@@ -568,7 +568,8 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
     }
     
     let html = '';
-    
+    const limited = customers.slice(0, 3);
+
     // 添加筛选提示
     if (salesFilter !== 'all') {
         html += `<div style="background: #e3f2fd; padding: 8px; margin-bottom: 10px; border-radius: 4px; text-align: center; font-size: 12px; color: #1976d2;">
@@ -576,7 +577,7 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
         </div>`;
     }
     
-    customers.forEach(customer => {
+    limited.forEach(customer => {
         const expiryLabel = formatExpiryLabel(customer.expiry_date);
         html += `
             <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
