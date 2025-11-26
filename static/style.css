@@ -336,6 +336,12 @@ html::-webkit-scrollbar {
     padding: 0;
 }
 
+/* 未来30天客户列表容器：固定高度显示约3条，允许滚动查看更多 */
+#unsignedCustomersList {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
 /* WebKit 内核隐藏滚动条 */
 .future-expiring-dashboard::-webkit-scrollbar {
     display: none;

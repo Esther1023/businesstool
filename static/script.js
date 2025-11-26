@@ -467,9 +467,7 @@ function updateFutureCustomersDisplayWithZones(customers, selectedZones = []) {
 
     let html = '';
 
-    const limited = customers.slice(0, 3);
-
-    limited.forEach(customer => {
+    customers.forEach(customer => {
         const expiryLabel = formatExpiryLabel(customer.expiry_date);
         html += `
             <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
@@ -568,8 +566,6 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
     }
     
     let html = '';
-    const limited = customers.slice(0, 3);
-
     // 添加筛选提示
     if (salesFilter !== 'all') {
         html += `<div style="background: #e3f2fd; padding: 8px; margin-bottom: 10px; border-radius: 4px; text-align: center; font-size: 12px; color: #1976d2;">
@@ -577,7 +573,7 @@ function updateFutureCustomersDisplay(customers, salesFilter) {
         </div>`;
     }
     
-    limited.forEach(customer => {
+    customers.forEach(customer => {
         const expiryLabel = formatExpiryLabel(customer.expiry_date);
         html += `
             <div style="border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #f9f9f9;">
@@ -2402,11 +2398,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // 显示客户列表（仅前3条） - 不显示数量统计信息
+        // 显示客户列表 - 不显示数量统计信息（通过容器高度控制显示数量）
         let html = '';
         const localOps = getLocalStageOps();
-        const limited = data.customers.slice(0, 3);
-        limited.forEach(customer => {
+        data.customers.forEach(customer => {
             let stageText = (customer.customer_stage && customer.customer_stage.trim()) ? customer.customer_stage : 'NA';
             const op = localOps[customer.jdy_account];
             const overridden = op && op.status === 'pending' && op.stage;
