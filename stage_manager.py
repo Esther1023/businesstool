@@ -181,9 +181,9 @@ class StageManager:
         
         return conflicts
     
-    def update_stage(self, jdy_id: str, target_stage: str, 
+    def update_stage(self, jdy_id: str, target_stage: str,
                     force: bool = False, metadata: Dict = None) -> Dict:
-        """更新客户阶段状态（原子性操作）"""
+        """更新客户阶段状态（简化版 - 直接修改状态，无复杂逻辑）"""
         with self._lock:  # 确保操作的原子性
             try:
                 # 1. 参数校验
@@ -191,19 +191,19 @@ class StageManager:
                     error_msg = "缺少必要参数：jdy_id和target_stage不能为空"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'validation'}
-                
+
                 # 2. 文件存在性检查
                 if not os.path.exists(self.excel_path):
                     error_msg = f"Excel文件不存在: {self.excel_path}"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'file_not_found'}
-                
+
                 # 3. 读取Excel文件
                 try:
                     pd = ensure_pandas_imported()
                     df = pd.read_excel(self.excel_path)
-                    
-                    # 兼容列名：将常见ID列重命名为“用户ID”
+
+                    # 兼容列名：将常见ID列重命名为"用户ID"
                     if '用户ID' not in df.columns:
                         id_aliases = ['简道云ID', '简道云账号', '账号ID', '用户唯一ID', '客户唯一ID', '用户id', 'ID']
                         for alias in id_aliases:
@@ -216,107 +216,68 @@ class StageManager:
                     error_msg = f"读取Excel文件失败: {str(e)}"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'file_read_error'}
-                
+
                 # 4. 检查必要列
                 if '用户ID' not in df.columns:
                     error_msg = "Excel文件格式错误：缺少用户ID列"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'column_missing'}
-                
+
                 # 5. 查找匹配记录
                 matching_rows = df[df['用户ID'].astype(str).str.contains(str(jdy_id), case=False, na=False)]
-                
+
                 if matching_rows.empty:
                     error_msg = f"未找到客户记录: {jdy_id}"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'customer_not_found'}
-                
+
                 # 6. 检查或创建阶段列
                 stage_column = '客户阶段'
                 if stage_column not in df.columns:
                     df[stage_column] = ''
-                
-                # 7. 冲突检测
-                conflicts = self._detect_conflicts(df, jdy_id)
-                if conflicts and not force:
-                    error_msg = f"检测到状态冲突: {conflicts[0]['message']}"
-                    self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
-                    return {
-                        'success': False, 
-                        'error': error_msg, 
-                        'error_type': 'conflict',
-                        'conflicts': conflicts
-                    }
-                
-                # 8. 状态校验
+
+                # 7. 直接更新所有匹配记录（无校验、无冲突检查）
                 updated_records = []
-                validation_errors = []
-                
+
                 for index in matching_rows.index:
                     stage_value = df.loc[index, stage_column]
                     current_stage = stage_value if (pd.notna(stage_value) if pd else stage_value is not None) else ''
-                    current_normalized = self._normalize_stage(current_stage)
-                    
-                    # 状态转换校验
-                    if not force:
-                        is_valid, validation_msg = self._validate_stage_transition(current_normalized, target_stage)
-                        if not is_valid:
-                            validation_errors.append({
-                                'index': index,
-                                'current_stage': current_normalized,
-                                'error': validation_msg
-                            })
-                            continue
-                    
+
+                    # 记录变更（不做任何校验）
                     updated_records.append({
                         'index': index,
-                        'old_stage': current_normalized,
+                        'old_stage': str(current_stage) if current_stage else '',
                         'new_stage': target_stage
                     })
-                
-                # 9. 如果有校验错误且非强制模式，返回错误
-                if validation_errors and not force:
-                    error_msg = f"状态校验失败: {validation_errors[0]['error']}"
-                    self._log_stage_change(jdy_id, validation_errors[0]['current_stage'], 
-                                         target_stage, False, error_msg, metadata)
-                    return {
-                        'success': False, 
-                        'error': error_msg, 
-                        'error_type': 'validation_failed',
-                        'validation_errors': validation_errors
-                    }
-                
-                # 10. 执行状态更新
+
+                    # 直接更新
+                    df.loc[index, stage_column] = target_stage
+
+                # 8. 保存文件
                 if not updated_records:
                     error_msg = "没有记录需要更新"
                     self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'no_updates'}
-                
-                # 更新记录
-                for record in updated_records:
-                    df.loc[record['index'], stage_column] = target_stage
-                
-                # 11. 保存文件
+
                 try:
                     df.to_excel(self.excel_path, index=False)
                 except Exception as e:
                     error_msg = f"保存Excel文件失败: {str(e)}"
-                    self._log_stage_change(jdy_id, updated_records[0]['old_stage'], 
+                    self._log_stage_change(jdy_id, updated_records[0]['old_stage'],
                                          target_stage, False, error_msg, metadata)
                     return {'success': False, 'error': error_msg, 'error_type': 'file_save_error'}
-                
-                # 12. 记录成功日志
+
+                # 9. 记录成功日志
                 for record in updated_records:
                     self._log_stage_change(jdy_id, record['old_stage'], target_stage, True, None, metadata)
-                
+
                 return {
                     'success': True,
-                    'message': f'客户 {jdy_id} 已成功推进到 {target_stage} 阶段',
+                    'message': f'客户 {jdy_id} 状态已更新为 {target_stage}',
                     'updated_count': len(updated_records),
-                    'updated_records': updated_records,
-                    'conflicts_resolved': len(conflicts) if force else 0
+                    'updated_records': updated_records
                 }
-                
+
             except Exception as e:
                 error_msg = f"状态更新异常: {str(e)}"
                 self._log_stage_change(jdy_id, '', target_stage, False, error_msg, metadata)

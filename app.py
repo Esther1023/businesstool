@@ -1567,19 +1567,18 @@ def query_customer():
 @app.route('/update_stage', methods=['POST'])
 @login_required
 def update_stage():
-    """更新客户阶段状态（使用优化的状态管理器）"""
+    """更新客户阶段状态（简化版 - 直接修改状态）"""
     try:
         data = request.get_json()
         if not data or 'jdy_id' not in data or 'stage' not in data:
             return jsonify({'success': False, 'error': '缺少必要参数', 'error_type': 'validation'}), 400
-        
+
         jdy_id = data['jdy_id']
         stage = data['stage']
-        force = data.get('force', False)  # 是否强制更新
-        
-        logger.info(f"更新客户阶段: {jdy_id} -> {stage} (force={force})")
-        
-        # 使用新的状态管理器（按用户数据源实例化）
+
+        logger.info(f"更新客户阶段: {jdy_id} -> {stage}")
+
+        # 使用状态管理器
         mgr = None
         if STAGE_MANAGER_AVAILABLE:
             try:
@@ -1592,7 +1591,7 @@ def update_stage():
             result = mgr.update_stage(
                 jdy_id=jdy_id,
                 target_stage=stage,
-                force=force,
+                force=False,  # 已简化，不再需要force参数
                 metadata={
                     'source': 'web_interface',
                     'user_agent': request.headers.get('User-Agent', ''),
@@ -1600,7 +1599,7 @@ def update_stage():
                     'timestamp': datetime.now().isoformat()
                 }
             )
-            
+
             # 根据结果返回适当的HTTP状态码
             if result['success']:
                 return jsonify(result), 200
@@ -1610,19 +1609,17 @@ def update_stage():
                     return jsonify(result), 400
                 elif error_type == 'customer_not_found':
                     return jsonify(result), 404
-                elif error_type == 'conflict':
-                    return jsonify(result), 409
                 else:
                     return jsonify(result), 500
         else:
             # 降级到原有逻辑
             logger.warning("状态管理器不可用或初始化失败，使用原有逻辑")
             return _legacy_update_stage(jdy_id, stage)
-        
+
     except Exception as e:
         logger.error(f"更新阶段失败: {str(e)}")
         return jsonify({
-            'success': False, 
+            'success': False,
             'error': str(e),
             'error_type': 'system_error'
         }), 500
