@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 import re
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def convert_to_lowercase(text: str) -> str:
     """
@@ -65,15 +65,36 @@ class TemplateHandler:
         
         # 渲染模板
         self.doc.render(context)
-        
-        # Generate output path if not provided
+
+        # 生成输出路径
         if output_path is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = os.path.splitext(os.path.basename(self.template_path))[0]
             output_path = f"{filename}_{timestamp}.docx"
-    
-        # Save the modified document
-        self.doc.save(output_path)
+
+        # 先保存到临时路径
+        tmp_path = os.path.join(tempfile.gettempdir(), f"_tmp_{os.path.basename(output_path)}")
+        self.doc.save(tmp_path)
+
+        # 尝试回填付款日期到含有“年 月 日”占位的段落/单元格
+        try:
+            py_doc = Document(tmp_path)
+            pay = f"{context.get('payment_year','') }年{context.get('payment_month','') }月{context.get('payment_day','') }日"
+            if pay.replace(' ', '') != '年月日':
+                self._inject_payment_date_fallback(py_doc, pay)
+            py_doc.save(output_path)
+            # 进一步进行 XML 级别兜底，处理 run 拆分或文本框内容
+            self._inject_payment_date_xml(output_path, pay)
+        except Exception:
+            # 回退为直接保存渲染结果
+            self.doc.save(output_path)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+
         return output_path
     
     def _process_quote_template(self, context: Dict[str, str]) -> Dict[str, str]:
@@ -128,6 +149,29 @@ class TemplateHandler:
         
         # 合并默认值
         processed_context.update(default_values)
+
+        # 计算到期日期减3天并拆分为年/月/日
+        try:
+            ey = int(str(context.get('end_year', processed_context['end_year'])))
+            em = int(str(context.get('end_month', processed_context['end_month'])))
+            ed = int(str(context.get('end_day', processed_context['end_day'])))
+            end_dt = datetime(ey, em, ed)
+            payment_dt = end_dt - timedelta(days=3)
+            processed_context['payment_year'] = str(payment_dt.year)
+            processed_context['payment_month'] = str(payment_dt.month)
+            processed_context['payment_day'] = str(payment_dt.day)
+        except Exception:
+            # 回退到当天-3天
+            fallback_dt = datetime.now() - timedelta(days=3)
+            processed_context['payment_year'] = str(fallback_dt.year)
+            processed_context['payment_month'] = str(fallback_dt.month)
+            processed_context['payment_day'] = str(fallback_dt.day)
+
+        # today（YYYY年MM月DD日）
+        try:
+            processed_context['today'] = datetime.now().strftime('%Y年%m月%d日')
+        except Exception:
+            processed_context['today'] = ''
         
         return processed_context
     
@@ -152,7 +196,109 @@ class TemplateHandler:
         else:
             context['second_row'] = 'false'
             
+        # 付款日期（到期日前3天）与 today
+        try:
+            ey = int(str(context.get('end_year', datetime.now().year)))
+            em = int(str(context.get('end_month', datetime.now().month)))
+            ed = int(str(context.get('end_day', datetime.now().day)))
+            end_dt = datetime(ey, em, ed)
+            payment_dt = end_dt - timedelta(days=3)
+            context['payment_year'] = str(payment_dt.year)
+            context['payment_month'] = str(payment_dt.month)
+            context['payment_day'] = str(payment_dt.day)
+        except Exception:
+            fallback_dt = datetime.now() - timedelta(days=3)
+            context['payment_year'] = str(fallback_dt.year)
+            context['payment_month'] = str(fallback_dt.month)
+            context['payment_day'] = str(fallback_dt.day)
+
+        try:
+            context['today'] = datetime.now().strftime('%Y年%m月%d日')
+        except Exception:
+            context['today'] = ''
+
+        # 金额字段与中文金额的兜底
+        if not context.get('payment_amount'):
+            context['payment_amount'] = context.get('total_amount', '0')
+        if not context.get('payment_amount_cn'):
+            context['payment_amount_cn'] = self._number_to_chinese(context.get('payment_amount', '0'))
+        # 模板别名容错（空格写法）
+        context['payment amount cn'] = context.get('payment_amount_cn')
+
         return context
+
+    def _inject_payment_date_fallback(self, py_doc: Document, date_str: str) -> None:
+        """
+        在渲染后文档中，将形如“年 _ 月 __ 日”或“年  月   日”的占位，替换为指定日期字符串。
+        不依赖模板变量是否存在，作为兜底注入，避免 run 拆分导致未替换。
+        """
+        import re
+
+        patterns = [
+            re.compile(r"年\s*_+\s*月\s*_+\s*日"),
+            re.compile(r"年\s+月\s+日"),
+            re.compile(r"\{\{\s*payment_year\s*\}\}\s*年\s*\{\{\s*payment_month\s*\}\}\s*月\s*\{\{\s*payment_day\s*\}\}\s*日"),
+        ]
+
+        def replace_in_paragraph(p):
+            text = p.text
+            for pat in patterns:
+                if pat.search(text):
+                    new_text = pat.sub(date_str, text, count=1)
+                    p.text = new_text
+                    return True
+            return False
+
+        # 段落
+        for p in py_doc.paragraphs:
+            replace_in_paragraph(p)
+
+        # 表格单元格
+        for table in py_doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for p in cell.paragraphs:
+                        replace_in_paragraph(p)
+
+    def _inject_payment_date_xml(self, docx_path: str, date_str: str) -> None:
+        """
+        使用正则在 XML 层进行兜底替换，覆盖被 run/tag 分割的“年…月…日”序列。
+        """
+        import zipfile, tempfile, shutil, re
+
+        try:
+            with zipfile.ZipFile(docx_path, 'r') as zin:
+                xml = zin.read('word/document.xml').decode('utf-8', 'ignore')
+
+            # 匹配被标签/样式分割的日期占位：年…月…日（尽量局部、非贪婪）
+            patterns = [
+                r"年(?:\s|_|\u3000|</w:t>.*?<w:t>){0,20}月(?:\s|_|\u3000|</w:t>.*?<w:t>){0,20}日",
+                r"\{\{\s*payment_year\s*\}\}(?:</w:t>.*?<w:t>|\s){0,20}年(?:</w:t>.*?<w:t>|\s){0,20}\{\{\s*payment_month\s*\}\}(?:</w:t>.*?<w:t>|\s){0,20}月(?:</w:t>.*?<w:t>|\s){0,20}\{\{\s*payment_day\s*\}\}(?:</w:t>.*?<w:t>|\s){0,20}日",
+            ]
+
+            new_xml = xml
+            replaced = False
+            for pat in patterns:
+                new_xml2 = re.sub(pat, date_str, new_xml, count=1, flags=re.DOTALL)
+                if new_xml2 != new_xml:
+                    new_xml = new_xml2
+                    replaced = True
+                    break
+
+            if not replaced:
+                return
+
+            tmp_zip = tempfile.mktemp(suffix='.docx')
+            with zipfile.ZipFile(docx_path, 'r') as zin, zipfile.ZipFile(tmp_zip, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    if item.filename == 'word/document.xml':
+                        zout.writestr(item, new_xml)
+                    else:
+                        zout.writestr(item, zin.read(item.filename))
+
+            shutil.move(tmp_zip, docx_path)
+        except Exception:
+            pass
     
     def _number_to_chinese(self, amount_str: str) -> str:
         """
