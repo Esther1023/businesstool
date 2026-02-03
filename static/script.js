@@ -674,7 +674,23 @@ document.addEventListener('DOMContentLoaded', function() {
         // 延迟显示备忘录白板
         setTimeout(() => {
             if (typeof showFutureExpiringCustomersDashboard === 'function') {
-                showFutureExpiringCustomersDashboard([], []);
+                // 读取已保存的筛选偏好（战区）
+                let savedZones = [];
+                try {
+                    const saved = localStorage.getItem('selected_filter_zones');
+                    if (saved) {
+                        savedZones = JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.error('读取筛选缓存失败', e);
+                }
+                
+                // 使用保存的筛选条件初始化看板
+                if (savedZones.length > 0) {
+                    fetchExpiringCustomersWithZones(savedZones);
+                } else {
+                    showFutureExpiringCustomersDashboard([], []);
+                }
             }
         }, 500);
     }
@@ -930,6 +946,16 @@ function showExpiringZonesFilterModal() {
     safeJsonFetch('/get_zones')
         .then(function(data) {
             const zones = data.zones || [];
+            
+            // 读取已保存的筛选状态
+            let savedZones = [];
+            try {
+                const saved = localStorage.getItem('selected_filter_zones');
+                if (saved) {
+                    savedZones = JSON.parse(saved);
+                }
+            } catch (e) { }
+
             zones.forEach(function(zone) {
                 const label = document.createElement('label');
                 label.style.display = 'flex';
@@ -943,6 +969,10 @@ function showExpiringZonesFilterModal() {
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.value = zone;
+                // 如果在保存列表中，默认选中
+                if (savedZones.includes(zone)) {
+                    checkbox.checked = true;
+                }
 
                 const span = document.createElement('span');
                 span.textContent = zone;
@@ -970,6 +1000,10 @@ function showExpiringZonesFilterModal() {
         checkboxContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(function(cb){
             selectedZones.push(cb.value);
         });
+        
+        // 保存筛选状态到 localStorage
+        localStorage.setItem('selected_filter_zones', JSON.stringify(selectedZones));
+        
         modalOverlay.remove();
         fetchExpiringCustomersWithZones(selectedZones);
     });

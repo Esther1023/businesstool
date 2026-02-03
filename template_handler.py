@@ -110,6 +110,7 @@ class TemplateHandler:
             'total_amount': context.get('total_amount', '0'),
             'user_count': context.get('user_count', '1'),
             'unit_price': context.get('unit_price', '0'),
+            'product_version': context.get('product_version', '标准版'),  # 默认标准版
         }
         
         # 为其他可能的模板变量提供默认值
