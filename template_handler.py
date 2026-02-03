@@ -152,12 +152,14 @@ class TemplateHandler:
         processed_context.update(default_values)
 
         # 计算到期日期减3天并拆分为年/月/日
+        # 修改为：上一服务期截止日前3天（即本次开始日期前3天）
         try:
-            ey = int(str(context.get('end_year', processed_context['end_year'])))
-            em = int(str(context.get('end_month', processed_context['end_month'])))
-            ed = int(str(context.get('end_day', processed_context['end_day'])))
-            end_dt = datetime(ey, em, ed)
-            payment_dt = end_dt - timedelta(days=3)
+            sy = int(str(context.get('start_year', processed_context['start_year'])))
+            sm = int(str(context.get('start_month', processed_context['start_month'])))
+            sd = int(str(context.get('start_day', processed_context['start_day'])))
+            start_dt = datetime(sy, sm, sd)
+            payment_dt = start_dt - timedelta(days=3)
+            
             processed_context['payment_year'] = str(payment_dt.year)
             processed_context['payment_month'] = str(payment_dt.month)
             processed_context['payment_day'] = str(payment_dt.day)
@@ -197,17 +199,24 @@ class TemplateHandler:
         else:
             context['second_row'] = 'false'
             
-        # 付款日期（到期日前3天）与 today
+        # 付款日期（上一服务期截止之日前3个工作日）
+        # 逻辑：上一服务期截止日 ≈ 本次服务开始日期 - 1天（或直接以开始日期为基准）
+        # 用户反馈：应使用“实际到期时间-3天”，即本次开始时间附近的日期
         try:
-            ey = int(str(context.get('end_year', datetime.now().year)))
-            em = int(str(context.get('end_month', datetime.now().month)))
-            ed = int(str(context.get('end_day', datetime.now().day)))
-            end_dt = datetime(ey, em, ed)
-            payment_dt = end_dt - timedelta(days=3)
+            # 优先使用开始日期计算（续费场景下，开始日期即为上一期结束后的次日）
+            sy = int(str(context.get('start_year', datetime.now().year)))
+            sm = int(str(context.get('start_month', datetime.now().month)))
+            sd = int(str(context.get('start_day', datetime.now().day)))
+            start_dt = datetime(sy, sm, sd)
+            # 计算付款日：开始日期 - 3天（近似上一期截止日前3天）
+            # 例如：开始 2026-03-04 -> 付款 2026-03-01
+            payment_dt = start_dt - timedelta(days=3)
+            
             context['payment_year'] = str(payment_dt.year)
             context['payment_month'] = str(payment_dt.month)
             context['payment_day'] = str(payment_dt.day)
         except Exception:
+            # 回退到当前日期-3天
             fallback_dt = datetime.now() - timedelta(days=3)
             context['payment_year'] = str(fallback_dt.year)
             context['payment_month'] = str(fallback_dt.month)
