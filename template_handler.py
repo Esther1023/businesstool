@@ -83,8 +83,8 @@ class TemplateHandler:
             if pay.replace(' ', '') != '年月日':
                 self._inject_payment_date_fallback(py_doc, pay)
             py_doc.save(output_path)
-            # 进一步进行 XML 级别兜底，处理 run 拆分或文本框内容
-            self._inject_payment_date_xml(output_path, pay)
+            # 移除XML级别的全局兜底，避免误伤服务期限
+            # self._inject_payment_date_xml(output_path, pay)
         except Exception:
             # 回退为直接保存渲染结果
             self.doc.save(output_path)
@@ -230,7 +230,7 @@ class TemplateHandler:
     def _inject_payment_date_fallback(self, py_doc: Document, date_str: str) -> None:
         """
         在渲染后文档中，将形如“年 _ 月 __ 日”或“年  月   日”的占位，替换为指定日期字符串。
-        不依赖模板变量是否存在，作为兜底注入，避免 run 拆分导致未替换。
+        仅在包含“付款方式”或“甲方应在”的段落中执行，避免误伤服务期限。
         """
         import re
 
@@ -241,12 +241,18 @@ class TemplateHandler:
         ]
 
         def replace_in_paragraph(p):
+            # 仅处理包含“付款方式”或“甲方应在”的段落，避免误伤服务期限
+            if '付款方式' not in p.text and '甲方应在' not in p.text:
+                return False
+
             text = p.text
             for pat in patterns:
                 if pat.search(text):
                     new_text = pat.sub(date_str, text, count=1)
-                    p.text = new_text
-                    return True
+                    # 只有在真正发生替换时才更新 paragraph.text，避免不必要的格式丢失
+                    if new_text != text:
+                        p.text = new_text
+                        return True
             return False
 
         # 段落
